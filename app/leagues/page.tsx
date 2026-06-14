@@ -279,9 +279,18 @@ export default function LeaguesPage() {
                           </div>
                         )}
                         {isApproved && (
-                          <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full font-medium">
-                            참가 중
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full font-medium">
+                              참가 중
+                            </span>
+                            <button
+                              onClick={() => handleLeave(league._id)}
+                              disabled={isProcessing}
+                              className="text-xs text-gray-400 hover:text-red-500"
+                            >
+                              취소
+                            </button>
+                          </div>
                         )}
 
                         {/* 관리자 편집/삭제 버튼 */}

@@ -97,7 +97,7 @@ export const listAll = query({
   args: {},
   handler: async (ctx) => {
     const role = await getEffectiveRole(ctx);
-    if (role !== "superAdmin") return [];
+    if (role !== "superAdmin" && role !== "admin") return [];
     return await ctx.db.query("users").take(200);
   },
 });

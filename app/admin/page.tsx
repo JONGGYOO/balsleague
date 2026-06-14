@@ -73,7 +73,7 @@ export default function AdminPage() {
           <TabButton active={activeTab === "clans"} onClick={() => setActiveTab("clans")}>
             클랜 관리
           </TabButton>
-          {isSuperAdmin && (
+          {isManager && (
             <TabButton active={activeTab === "users"} onClick={() => setActiveTab("users")}>
               사용자 역할
             </TabButton>
@@ -87,7 +87,7 @@ export default function AdminPage() {
 
         {activeTab === "participants" && <PendingParticipants />}
         {activeTab === "clans" && <ClanManagement />}
-        {activeTab === "users" && isSuperAdmin && <UserManagement />}
+        {activeTab === "users" && isManager && <UserManagement isSuperAdmin={isSuperAdmin} />}
         {activeTab === "deleted" && isSuperAdmin && <DeletedLeagues />}
       </main>
     </div>
@@ -275,7 +275,7 @@ function ClanManagement() {
   );
 }
 
-function UserManagement() {
+function UserManagement({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const users = useQuery(api.users.listAll);
   const setRole = useMutation(api.users.setRole);
   const currentUser = useQuery(api.users.getCurrentUser);
@@ -300,41 +300,69 @@ function UserManagement() {
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-gray-500 mb-4">
-        사용자를 관리자로 지정하거나 해제할 수 있습니다.
-      </p>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm text-gray-500">
+          총 <strong className="text-gray-900">{users.length}명</strong>의 사용자가 등록되어 있습니다.
+        </p>
+      </div>
       {users.map((user) => {
         const isSelf = user._id === currentUser?._id;
         const isAdmin = user.role === "admin";
         const isProcessing = processingId === user._id;
 
+        const birthDate = [user.birthYear, user.birthMonth, user.birthDay]
+          .every(Boolean)
+          ? `${user.birthYear}.${String(user.birthMonth).padStart(2, "0")}.${String(user.birthDay).padStart(2, "0")}`
+          : null;
+
         return (
           <div
             key={user._id}
-            className="bg-white rounded-xl border border-gray-200 px-5 py-4 flex items-center justify-between shadow-sm"
+            className="bg-white rounded-xl border border-gray-200 px-5 py-4 shadow-sm"
           >
-            <div>
-              <p className="font-semibold text-gray-900">
-                {displayName(user)}
-                {isSelf && <span className="ml-1 text-xs text-blue-500">(나)</span>}
-              </p>
-              <p className="text-xs text-gray-400 mt-0.5">
-                {user.email ?? user.tokenIdentifier}
-              </p>
-            </div>
-            <div className="flex items-center gap-3 ml-4 shrink-0">
-              {isAdmin ? (
-                <span className="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
-                  관리자
-                </span>
-              ) : (
-                <span className="text-xs text-gray-400">일반 사용자</span>
-              )}
-              {!isSelf && (
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-semibold text-gray-900">
+                    {displayName(user)}
+                    {isSelf && <span className="ml-1 text-xs text-blue-500">(나)</span>}
+                  </p>
+                  {isAdmin ? (
+                    <span className="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                      관리자
+                    </span>
+                  ) : (
+                    <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                      일반 사용자
+                    </span>
+                  )}
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500">
+                  {user.organization && (
+                    <span><span className="text-gray-400">클랜</span> {user.organization}</span>
+                  )}
+                  {user.name && (
+                    <span><span className="text-gray-400">이름</span> {user.name}</span>
+                  )}
+                  {user.nickname && (
+                    <span><span className="text-gray-400">닉네임</span> {user.nickname}</span>
+                  )}
+                  {birthDate && (
+                    <span><span className="text-gray-400">생년월일</span> {birthDate}</span>
+                  )}
+                  {user.phone && (
+                    <span><span className="text-gray-400">연락처</span> {user.phone}</span>
+                  )}
+                  {user.email && (
+                    <span className="col-span-2"><span className="text-gray-400">이메일</span> {user.email}</span>
+                  )}
+                </div>
+              </div>
+              {isSuperAdmin && !isSelf && (
                 <button
                   onClick={() => handleToggleAdmin(user._id, isAdmin)}
                   disabled={isProcessing}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50 ${
+                  className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50 ${
                     isAdmin
                       ? "border border-gray-300 text-gray-600 hover:bg-gray-50"
                       : "bg-indigo-600 text-white hover:bg-indigo-700"
