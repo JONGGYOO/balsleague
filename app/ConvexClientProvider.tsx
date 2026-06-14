@@ -27,7 +27,6 @@ export function ConvexClientProvider({ children }: { children: ReactNode }) {
     <ClerkProvider
       signInFallbackRedirectUrl="/leagues"
       signUpFallbackRedirectUrl="/leagues"
-      signOutForceRedirectUrl="/sign-in"
       localization={{
         signIn: {
           start: {
