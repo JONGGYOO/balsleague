@@ -44,4 +44,50 @@ export default defineSchema({
     awayUserId: v.id("users"),
     awayScore: v.number(),
   }).index("by_league", ["leagueId"]),
+
+  innerwars: defineTable({
+    year: v.number(),
+    month: v.number(),
+    day: v.number(),
+    name: v.string(),
+    createdBy: v.string(),
+    deletedAt: v.optional(v.number()),
+    status: v.optional(
+      v.union(
+        v.literal("draft"),
+        v.literal("teamAssigned"),
+        v.literal("inProgress"),
+        v.literal("done"),
+      )
+    ),
+    winnerTeam: v.optional(v.union(v.literal("A"), v.literal("B"))),
+    currentIndexA: v.optional(v.number()),
+    currentIndexB: v.optional(v.number()),
+    // 팀 배정/초기화 권한: "admin"=관리자만, "all"=모든 사용자
+    teamAssignPermission: v.optional(v.union(v.literal("admin"), v.literal("all"))),
+  }).index("by_year_month", ["year", "month"]),
+
+  innerwarParticipants: defineTable({
+    innerwarId: v.id("innerwars"),
+    userId: v.id("users"),
+    status: v.optional(v.union(v.literal("pending"), v.literal("approved"))),
+    team: v.optional(v.union(v.literal("A"), v.literal("B"))),
+    teamOrder: v.optional(v.number()),
+  })
+    .index("by_innerwar", ["innerwarId"])
+    .index("by_innerwar_and_user", ["innerwarId", "userId"])
+    .index("by_user", ["userId"]),
+
+  innerwarMatches: defineTable({
+    innerwarId: v.id("innerwars"),
+    playerAId: v.id("users"),
+    playerBId: v.id("users"),
+    scoreA: v.optional(v.number()),
+    scoreB: v.optional(v.number()),
+    winnerId: v.optional(v.id("users")),
+    status: v.optional(v.union(v.literal("pending"), v.literal("scored"), v.literal("done"))),
+    matchIndex: v.number(),
+  })
+    .index("by_innerwar", ["innerwarId"])
+    .index("by_innerwar_and_index", ["innerwarId", "matchIndex"]),
 });

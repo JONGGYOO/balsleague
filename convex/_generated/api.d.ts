@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as innerwars from "../innerwars.js";
 import type * as leagues from "../leagues.js";
 import type * as organizations from "../organizations.js";
 import type * as scores from "../scores.js";
@@ -21,6 +22,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  innerwars: typeof innerwars;
   leagues: typeof leagues;
   organizations: typeof organizations;
   scores: typeof scores;
