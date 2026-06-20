@@ -816,8 +816,7 @@ export default function InnerwarDetailPage() {
               return (
                 <div className="bg-white rounded-xl border border-yellow-200 shadow-sm overflow-hidden">
                   <div className="px-5 py-4 border-b border-yellow-100 bg-yellow-50 text-center">
-                    <p className="text-base font-bold text-yellow-800">내기 전달</p>
-                    <p className="text-sm text-yellow-700 mt-0.5">
+                    <p className="text-sm text-yellow-700">
                       내기품목:{" "}
                       <span className="font-bold">{innerwar.betItem}</span>
                     </p>
