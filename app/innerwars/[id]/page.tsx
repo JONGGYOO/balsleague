@@ -97,6 +97,14 @@ export default function InnerwarDetailPage() {
     [matches]
   );
 
+  // 5-1: 현재 경기 양쪽 선수 여부 — 관리자 아닌 경우에도 점수 입력 가능
+  const isCurrentMatchPlayer = !!(
+    activeMatch &&
+    currentUser &&
+    (activeMatch.playerAId === currentUser._id || activeMatch.playerBId === currentUser._id)
+  );
+  const canInputScore = isManager || isCurrentMatchPlayer;
+
   const isLastMatch = useMemo(() => {
     if (!innerwar || teamA.length === 0 || teamB.length === 0) return false;
     return (
@@ -597,7 +605,7 @@ export default function InnerwarDetailPage() {
                     </div>
                   </div>
 
-                  {isManager && (
+                  {canInputScore && (
                     <>
                       {activeMatch.status === "pending" && (
                         <>

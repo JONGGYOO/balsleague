@@ -26,6 +26,7 @@ export default function LeagueDetailPage() {
   const recentMatches = useQuery(api.scores.listByLeague, { leagueId });
 
   const addScore = useMutation(api.scores.add);
+  const updateScore = useMutation(api.scores.updateScore);
 
   const effectiveRole = currentUser?.effectiveRole ?? "user";
   const isManager = effectiveRole === "superAdmin" || effectiveRole === "admin";
@@ -60,6 +61,15 @@ export default function LeagueDetailPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
+
+  // 최근 경기 수정 상태
+  const [editingMatch, setEditingMatch] = useState<{
+    id: Id<"scores">;
+    homeScore: string;
+    awayScore: string;
+  } | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const hasDuplicate = useQuery(
     api.scores.checkDuplicate,
@@ -140,6 +150,26 @@ export default function LeagueDetailPage() {
       return;
     }
     await doSubmit(my, opp);
+  }
+
+  async function handleMatchEditSave() {
+    if (!editingMatch) return;
+    const home = parseInt(editingMatch.homeScore, 10);
+    const away = parseInt(editingMatch.awayScore, 10);
+    if (isNaN(home) || isNaN(away) || home < 0 || away < 0) {
+      setEditError("올바른 점수를 입력해주세요.");
+      return;
+    }
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      await updateScore({ scoreId: editingMatch.id, homeScore: home, awayScore: away });
+      setEditingMatch(null);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "오류가 발생했습니다.");
+    } finally {
+      setEditSaving(false);
+    }
   }
 
   // 로딩 중
@@ -466,23 +496,101 @@ export default function LeagueDetailPage() {
                 const homeWon = match.homeScore > match.awayScore;
                 const awayWon = match.awayScore > match.homeScore;
                 const draw = match.homeScore === match.awayScore;
+                // 7-3: 대전한 두 선수 모두 수정 가능, 관리자는 전체 가능
+                const canEdit =
+                  isManager ||
+                  match.homeUserId === currentUser?._id ||
+                  match.awayUserId === currentUser?._id;
+                const isEditingThis = editingMatch?.id === match._id;
                 return (
-                  <li key={match._id} className="px-5 py-3 flex items-center justify-between gap-2">
-                    <Link
-                      href={`/players/${match.homeUserId}?league=${leagueId}`}
-                      className={`flex-1 text-right text-sm font-medium hover:underline ${homeWon ? "text-green-700" : draw ? "text-gray-700" : "text-gray-400"}`}
-                    >
-                      {displayName(match.homeUser)}
-                    </Link>
-                    <span className="shrink-0 font-bold text-gray-900 text-base px-3">
-                      {match.homeScore} : {match.awayScore}
-                    </span>
-                    <Link
-                      href={`/players/${match.awayUserId}?league=${leagueId}`}
-                      className={`flex-1 text-left text-sm font-medium hover:underline ${awayWon ? "text-green-700" : draw ? "text-gray-700" : "text-gray-400"}`}
-                    >
-                      {displayName(match.awayUser)}
-                    </Link>
+                  <li key={match._id} className="px-4 py-3">
+                    {/* 7-2: 모든 컨트롤을 한 줄로 */}
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={`/players/${match.homeUserId}?league=${leagueId}`}
+                        className={`flex-1 text-right text-sm font-medium hover:underline truncate ${homeWon ? "text-green-700" : draw ? "text-gray-700" : "text-gray-400"}`}
+                      >
+                        {displayName(match.homeUser)}
+                      </Link>
+
+                      {/* 스코어 or 편집 인풋 */}
+                      {isEditingThis ? (
+                        <div className="shrink-0 flex items-center gap-1">
+                          <input
+                            type="number"
+                            min={0}
+                            value={editingMatch.homeScore}
+                            onChange={(e) =>
+                              setEditingMatch((prev) => prev ? { ...prev, homeScore: e.target.value } : prev)
+                            }
+                            className="w-10 rounded border border-gray-300 px-1 py-0.5 text-sm text-center outline-none focus:border-blue-500"
+                          />
+                          <span className="text-gray-500 font-bold text-sm">:</span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={editingMatch.awayScore}
+                            onChange={(e) =>
+                              setEditingMatch((prev) => prev ? { ...prev, awayScore: e.target.value } : prev)
+                            }
+                            className="w-10 rounded border border-gray-300 px-1 py-0.5 text-sm text-center outline-none focus:border-blue-500"
+                          />
+                        </div>
+                      ) : (
+                        <span className="shrink-0 font-bold text-gray-900 text-base px-2">
+                          {match.homeScore} : {match.awayScore}
+                        </span>
+                      )}
+
+                      <Link
+                        href={`/players/${match.awayUserId}?league=${leagueId}`}
+                        className={`flex-1 text-left text-sm font-medium hover:underline truncate ${awayWon ? "text-green-700" : draw ? "text-gray-700" : "text-gray-400"}`}
+                      >
+                        {displayName(match.awayUser)}
+                      </Link>
+
+                      {/* 수정/취소/저장 버튼 — 한 줄 */}
+                      <div className="shrink-0 flex items-center gap-1">
+                        {canEdit && (
+                          isEditingThis ? (
+                            <>
+                              <button
+                                onClick={() => { setEditingMatch(null); setEditError(null); }}
+                                className="text-xs px-2 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 whitespace-nowrap"
+                              >
+                                취소
+                              </button>
+                              <button
+                                onClick={handleMatchEditSave}
+                                disabled={editSaving}
+                                className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
+                              >
+                                {editSaving ? "..." : "저장"}
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setEditError(null);
+                                setEditingMatch({
+                                  id: match._id,
+                                  homeScore: String(match.homeScore),
+                                  awayScore: String(match.awayScore),
+                                });
+                              }}
+                              className="text-xs px-2 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 whitespace-nowrap"
+                            >
+                              수정
+                            </button>
+                          )
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 저장 오류 메시지 */}
+                    {isEditingThis && editError && (
+                      <p className="text-xs text-red-500 text-right mt-1">{editError}</p>
+                    )}
                   </li>
                 );
               })}

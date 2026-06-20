@@ -1,7 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { Id, Doc } from "./_generated/dataModel";
-import { getOrCreateUser } from "./utils";
+import { getOrCreateUser, getEffectiveRole } from "./utils";
 
 export const add = mutation({
   args: {
@@ -147,6 +147,45 @@ export const getStandings = query({
     });
 
     return result;
+  },
+});
+
+export const updateScore = mutation({
+  args: {
+    scoreId: v.id("scores"),
+    homeScore: v.number(),
+    awayScore: v.number(),
+  },
+  handler: async (ctx, args) => {
+    if (args.homeScore < 0 || args.awayScore < 0) {
+      throw new Error("점수는 0 이상이어야 합니다.");
+    }
+
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("인증되지 않은 사용자입니다.");
+
+    const me = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .unique();
+    if (!me) throw new Error("사용자를 찾을 수 없습니다.");
+
+    const score = await ctx.db.get(args.scoreId);
+    if (!score) throw new Error("경기 기록을 찾을 수 없습니다.");
+
+    const effectiveRole = await getEffectiveRole(ctx);
+    // 대전한 두 선수(홈/어웨이) 모두 수정 가능
+    const isOwner = score.homeUserId === me._id || score.awayUserId === me._id;
+    const isManager = effectiveRole === "superAdmin" || effectiveRole === "admin";
+
+    if (!isOwner && !isManager) {
+      throw new Error("수정 권한이 없습니다.");
+    }
+
+    await ctx.db.patch(args.scoreId, {
+      homeScore: args.homeScore,
+      awayScore: args.awayScore,
+    });
   },
 });
 

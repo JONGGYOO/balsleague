@@ -461,7 +461,7 @@ export const startGame = mutation({
   },
 });
 
-// 3-4: 점수 저장 (확정 전 수정 가능), 4-1: 동점 허용 (마지막 경기 제외는 confirmMatchResult에서 처리)
+// 5-1: 점수 저장 — 슈퍼관리자/관리자 전체 가능, 일반 사용자는 현재 경기 양쪽 선수만 가능
 export const saveMatchScore = mutation({
   args: {
     matchId: v.id("innerwarMatches"),
@@ -469,12 +469,24 @@ export const saveMatchScore = mutation({
     scoreB: v.number(),
   },
   handler: async (ctx, args) => {
-    const role = await getEffectiveRole(ctx);
-    if (role !== "superAdmin" && role !== "admin") throw new Error("권한이 없습니다.");
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("인증되지 않은 사용자입니다.");
 
     const match = await ctx.db.get(args.matchId);
     if (!match) throw new Error("경기를 찾을 수 없습니다.");
     if (match.status === "done") throw new Error("이미 확정된 경기입니다.");
+
+    const role = await getEffectiveRole(ctx);
+    const isManager = role === "superAdmin" || role === "admin";
+    if (!isManager) {
+      const me = await ctx.db
+        .query("users")
+        .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+        .unique();
+      if (!me) throw new Error("사용자를 찾을 수 없습니다.");
+      const isPlayer = match.playerAId === me._id || match.playerBId === me._id;
+      if (!isPlayer) throw new Error("현재 경기 참가자 또는 관리자만 점수를 입력할 수 있습니다.");
+    }
 
     const isDraw = args.scoreA === args.scoreB;
     if (isDraw) {
@@ -500,12 +512,26 @@ export const saveMatchScore = mutation({
   },
 });
 
-// 3-4: 점수 확정 + 다음 경기 진행, 4-1: 동반 탈락 처리
+// 5-1: 점수 확정 + 다음 경기 진행 — 슈퍼관리자/관리자 전체 가능, 일반 사용자는 현재 경기 양쪽 선수만 가능
 export const confirmMatchResult = mutation({
   args: { matchId: v.id("innerwarMatches") },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("인증되지 않은 사용자입니다.");
+
     const role = await getEffectiveRole(ctx);
-    if (role !== "superAdmin" && role !== "admin") throw new Error("권한이 없습니다.");
+    const isManager = role === "superAdmin" || role === "admin";
+    if (!isManager) {
+      const matchForCheck = await ctx.db.get(args.matchId);
+      if (!matchForCheck) throw new Error("경기를 찾을 수 없습니다.");
+      const me = await ctx.db
+        .query("users")
+        .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+        .unique();
+      if (!me) throw new Error("사용자를 찾을 수 없습니다.");
+      const isPlayer = matchForCheck.playerAId === me._id || matchForCheck.playerBId === me._id;
+      if (!isPlayer) throw new Error("현재 경기 참가자 또는 관리자만 결과를 확정할 수 있습니다.");
+    }
 
     const match = await ctx.db.get(args.matchId);
     if (!match) throw new Error("경기를 찾을 수 없습니다.");
