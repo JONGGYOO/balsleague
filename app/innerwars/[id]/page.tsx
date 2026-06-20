@@ -785,21 +785,66 @@ export default function InnerwarDetailPage() {
 
         {/* ── done 상태: 완료 ── */}
         {status === "done" && innerwar.winnerTeam && (
-          <div className={`rounded-xl px-6 py-8 text-center shadow-sm border ${
-            innerwar.winnerTeam === "A" ? "bg-blue-50 border-blue-200" : "bg-red-50 border-red-200"
-          }`}>
-            <div className="text-5xl mb-3">🎉</div>
-            <h2 className={`text-2xl font-black mb-1 ${
-              innerwar.winnerTeam === "A" ? "text-blue-700" : "text-red-700"
+          <>
+            <div className={`rounded-xl px-6 py-8 text-center shadow-sm border ${
+              innerwar.winnerTeam === "A" ? "bg-blue-50 border-blue-200" : "bg-red-50 border-red-200"
             }`}>
-              {innerwar.winnerTeam}팀 승리!
-            </h2>
-            <p className="text-sm text-gray-500 mb-4">총 {completedMatches.length}경기</p>
-            {/* 5-1: 경기 종료 후 초기화도 관리자만 */}
-            <div className="flex justify-center">
-              {renderResetButton(true)}
+              <div className="text-5xl mb-3">🎉</div>
+              <h2 className={`text-2xl font-black mb-1 ${
+                innerwar.winnerTeam === "A" ? "text-blue-700" : "text-red-700"
+              }`}>
+                {innerwar.winnerTeam}팀 승리!
+              </h2>
+              <p className="text-sm text-gray-500 mb-4">총 {completedMatches.length}경기</p>
+              {/* 5-1: 경기 종료 후 초기화도 관리자만 */}
+              <div className="flex justify-center">
+                {renderResetButton(true)}
+              </div>
             </div>
-          </div>
+
+            {/* 6-2: 내기 전달 화면 */}
+            {innerwar.betItem && (() => {
+              const winnerTeam = innerwar.winnerTeam!;
+              const winningTeam = winnerTeam === "A" ? teamA : teamB;
+              const losingTeam = winnerTeam === "A" ? teamB : teamA;
+              const winnerColor = winnerTeam === "A" ? "text-blue-700" : "text-red-700";
+              const loserColor = winnerTeam === "A" ? "text-red-600" : "text-blue-600";
+              const pairs = losingTeam.map((loser, i) => ({
+                loser,
+                winner: winningTeam[i % winningTeam.length],
+              }));
+              return (
+                <div className="bg-white rounded-xl border border-yellow-200 shadow-sm overflow-hidden">
+                  <div className="px-5 py-4 border-b border-yellow-100 bg-yellow-50 text-center">
+                    <p className="text-base font-bold text-yellow-800">내기 전달</p>
+                    <p className="text-sm text-yellow-700 mt-0.5">
+                      내기품목:{" "}
+                      <span className="font-bold">{innerwar.betItem}</span>
+                    </p>
+                  </div>
+                  <ul className="divide-y divide-gray-100">
+                    {pairs.map(({ loser, winner }, idx) => (
+                      <li key={loser._id} className="px-5 py-3 flex items-center gap-3">
+                        <span className="text-xs text-gray-400 w-5 text-right shrink-0">{idx + 1}</span>
+                        <span className={`flex-1 text-sm font-semibold text-right ${loserColor}`}>
+                          {displayName(loser.user)}
+                          <span className="ml-1 text-xs font-normal opacity-60">({winnerTeam === "A" ? "B" : "A"}팀)</span>
+                        </span>
+                        <span className="text-gray-400 text-sm shrink-0">→</span>
+                        <span className={`flex-1 text-sm font-semibold text-left ${winnerColor}`}>
+                          {displayName(winner.user)}
+                          <span className="ml-1 text-xs font-normal opacity-60">({winnerTeam}팀)</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="px-5 py-3 bg-yellow-50 text-center text-xs text-yellow-700">
+                    패전팀이 순서대로 승리팀에게 <span className="font-bold">{innerwar.betItem}</span>을(를) 전달합니다
+                  </div>
+                </div>
+              );
+            })()}
+          </>
         )}
 
         {/* 경기 기록 */}

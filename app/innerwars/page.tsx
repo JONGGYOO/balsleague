@@ -18,6 +18,7 @@ type FormState = {
   day: number;
   name: string;
   teamAssignPermission: "admin" | "all";
+  betItem: string;
 };
 
 const defaultForm = (): FormState => ({
@@ -26,6 +27,7 @@ const defaultForm = (): FormState => ({
   day: new Date().getDate(),
   name: "발스내전",
   teamAssignPermission: "admin",
+  betItem: "",
 });
 
 const STATUS_LABEL: Record<string, string> = {
@@ -87,6 +89,7 @@ export default function InnerwarsPage() {
     day: number;
     name: string;
     teamAssignPermission?: "admin" | "all";
+    betItem?: string;
   }) {
     setEditingId(w._id);
     setForm({
@@ -95,6 +98,7 @@ export default function InnerwarsPage() {
       day: w.day,
       name: w.name,
       teamAssignPermission: w.teamAssignPermission ?? "admin",
+      betItem: w.betItem ?? "",
     });
     setShowModal(true);
   }
@@ -109,11 +113,15 @@ export default function InnerwarsPage() {
     e.preventDefault();
     if (!form.name.trim()) return;
     setSubmitting(true);
+    const payload = {
+      ...form,
+      betItem: form.betItem.trim() || undefined,
+    };
     try {
       if (editingId) {
-        await updateInnerwar({ id: editingId, ...form });
+        await updateInnerwar({ id: editingId, ...payload });
       } else {
-        await createInnerwar(form);
+        await createInnerwar(payload);
       }
       closeModal();
     } finally {
@@ -394,6 +402,17 @@ export default function InnerwarsPage() {
                   placeholder="내전 이름을 입력하세요"
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">내기품목</label>
+                <input
+                  type="text"
+                  value={form.betItem}
+                  onChange={(e) => setForm({ ...form, betItem: e.target.value })}
+                  placeholder="예: 메가아아, 치킨 등"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
               </div>
 

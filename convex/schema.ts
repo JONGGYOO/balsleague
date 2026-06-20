@@ -65,6 +65,7 @@ export default defineSchema({
     currentIndexB: v.optional(v.number()),
     // 팀 배정/초기화 권한: "admin"=관리자만, "all"=모든 사용자
     teamAssignPermission: v.optional(v.union(v.literal("admin"), v.literal("all"))),
+    betItem: v.optional(v.string()),
   }).index("by_year_month", ["year", "month"]),
 
   innerwarParticipants: defineTable({

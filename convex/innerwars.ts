@@ -109,7 +109,7 @@ export const getDetail = query({
   },
 });
 
-// 4-3: teamAssignPermission 필드 추가
+// 4-3: teamAssignPermission 필드 추가 / 6-1: betItem 필드 추가
 export const create = mutation({
   args: {
     year: v.number(),
@@ -117,6 +117,7 @@ export const create = mutation({
     day: v.number(),
     name: v.string(),
     teamAssignPermission: v.optional(v.union(v.literal("admin"), v.literal("all"))),
+    betItem: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -132,6 +133,7 @@ export const create = mutation({
       createdBy: identity.tokenIdentifier,
       status: "draft",
       teamAssignPermission: args.teamAssignPermission ?? "admin",
+      betItem: args.betItem,
     });
   },
 });
@@ -144,6 +146,7 @@ export const update = mutation({
     day: v.number(),
     name: v.string(),
     teamAssignPermission: v.optional(v.union(v.literal("admin"), v.literal("all"))),
+    betItem: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -153,6 +156,22 @@ export const update = mutation({
 
     const { id, ...fields } = args;
     await ctx.db.patch(id, fields);
+  },
+});
+
+// 6-3: 기존 내전에 기본 내기품목 설정 (CLI 관리용 마이그레이션 — 인증 불필요)
+export const setDefaultBetItem = mutation({
+  args: { defaultBetItem: v.string() },
+  handler: async (ctx, args) => {
+    const all = await ctx.db.query("innerwars").take(500);
+    let updated = 0;
+    for (const w of all) {
+      if (!w.betItem) {
+        await ctx.db.patch(w._id, { betItem: args.defaultBetItem });
+        updated++;
+      }
+    }
+    return { updated };
   },
 });
 
