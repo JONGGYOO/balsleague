@@ -27,6 +27,7 @@ export default function LeagueDetailPage() {
 
   const addScore = useMutation(api.scores.add);
   const updateScore = useMutation(api.scores.updateScore);
+  const deleteScore = useMutation(api.scores.remove);
 
   const effectiveRole = currentUser?.effectiveRole ?? "user";
   const isManager = effectiveRole === "superAdmin" || effectiveRole === "admin";
@@ -70,6 +71,7 @@ export default function LeagueDetailPage() {
   } | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<Id<"scores"> | null>(null);
 
   const hasDuplicate = useQuery(
     api.scores.checkDuplicate,
@@ -169,6 +171,20 @@ export default function LeagueDetailPage() {
       setEditError(err instanceof Error ? err.message : "오류가 발생했습니다.");
     } finally {
       setEditSaving(false);
+    }
+  }
+
+  async function handleMatchDelete(scoreId: Id<"scores">) {
+    if (!window.confirm("이 경기 기록을 삭제하시겠습니까?")) return;
+    setDeletingId(scoreId);
+    setEditError(null);
+    try {
+      await deleteScore({ scoreId });
+      setEditingMatch(null);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "오류가 발생했습니다.");
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -554,6 +570,13 @@ export default function LeagueDetailPage() {
                         {canEdit && (
                           isEditingThis ? (
                             <>
+                              <button
+                                onClick={() => handleMatchDelete(match._id)}
+                                disabled={deletingId === match._id}
+                                className="text-xs px-2 py-1 rounded border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50 whitespace-nowrap"
+                              >
+                                {deletingId === match._id ? "..." : "삭제"}
+                              </button>
                               <button
                                 onClick={() => { setEditingMatch(null); setEditError(null); }}
                                 className="text-xs px-2 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 whitespace-nowrap"

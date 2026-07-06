@@ -37,6 +37,7 @@ export default function MatchesPage() {
   const participationStatus = useQuery(api.leagues.getMyParticipationStatus, { leagueId });
   const matches = useQuery(api.scores.listAllByLeague, { leagueId });
   const updateScore = useMutation(api.scores.updateScore);
+  const deleteScore = useMutation(api.scores.remove);
 
   const effectiveRole = currentUser?.effectiveRole ?? "user";
   const isManager = effectiveRole === "superAdmin" || effectiveRole === "admin";
@@ -45,6 +46,7 @@ export default function MatchesPage() {
   const [editing, setEditing] = useState<EditingState | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<Id<"scores"> | null>(null);
 
   useEffect(() => {
     if (currentUser === undefined || participationStatus === undefined || league === undefined) return;
@@ -59,6 +61,20 @@ export default function MatchesPage() {
   function cancelEdit() {
     setEditing(null);
     setSaveError(null);
+  }
+
+  async function handleDelete(scoreId: Id<"scores">) {
+    if (!window.confirm("이 경기 기록을 삭제하시겠습니까?")) return;
+    setDeletingId(scoreId);
+    setSaveError(null);
+    try {
+      await deleteScore({ scoreId });
+      setEditing(null);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "오류가 발생했습니다.");
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   async function handleSave() {
@@ -242,6 +258,13 @@ export default function MatchesPage() {
                         {canEdit && (
                           isEditingThis ? (
                             <>
+                              <button
+                                onClick={() => handleDelete(match._id)}
+                                disabled={deletingId === match._id}
+                                className="text-xs px-2 py-1 rounded border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50 whitespace-nowrap"
+                              >
+                                {deletingId === match._id ? "..." : "삭제"}
+                              </button>
                               <button
                                 onClick={cancelEdit}
                                 className="text-xs px-2 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 whitespace-nowrap"

@@ -189,6 +189,36 @@ export const updateScore = mutation({
   },
 });
 
+export const remove = mutation({
+  args: {
+    scoreId: v.id("scores"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("인증되지 않은 사용자입니다.");
+
+    const me = await ctx.db 
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .unique();
+    if (!me) throw new Error("사용자를 찾을 수 없습니다.");
+
+    const score = await ctx.db.get(args.scoreId);
+    if (!score) throw new Error("경기 기록을 찾을 수 없습니다.");
+
+    const effectiveRole = await getEffectiveRole(ctx);
+    // 대전한 두 선수(홈/어웨이) 모두 삭제 가능
+    const isOwner = score.homeUserId === me._id || score.awayUserId === me._id;
+    const isManager = effectiveRole === "superAdmin" || effectiveRole === "admin";
+
+    if (!isOwner && !isManager) {
+      throw new Error("삭제 권한이 없습니다.");
+    }
+
+    await ctx.db.delete(args.scoreId);
+  },
+});
+
 // 같은 리그 내 동일 상대와의 기존 경기 여부 확인
 export const checkDuplicate = query({
   args: {
