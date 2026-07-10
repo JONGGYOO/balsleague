@@ -297,10 +297,10 @@ export const assignTeamsRandom = mutation({
 });
 
 // 4-3: teamAssignPermission 체크
-// Grade.md 참고: 리그:내전 = 7:3 가중치. 승수 대신 승률(+스무딩)을 사용해
+// Grade.md 참고: 리그:내전 = 8:2 가중치. 승수 대신 승률(+스무딩)을 사용해
 // 표본이 적은 선수가 과대/과소평가되는 것을 완화한다.
-const SCORE_WEIGHT_LEAGUE = 0.7;
-const SCORE_WEIGHT_INNERWAR = 0.3;
+const SCORE_WEIGHT_LEAGUE = 0.8;
+const SCORE_WEIGHT_INNERWAR = 0.2;
 const SCORE_SMOOTHING_GAMES = 4; // 스무딩 상수(K) — 클수록 표본 적은 선수를 0.5(중간값)에 가깝게 당김
 
 function smoothedWinRate(wins: number, games: number, k: number): number {
