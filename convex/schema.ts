@@ -74,7 +74,8 @@ export default defineSchema({
     status: v.optional(v.union(v.literal("pending"), v.literal("approved"))),
     team: v.optional(v.union(v.literal("A"), v.literal("B"))),
     teamOrder: v.optional(v.number()),
-    // 성적기반 배정 시점의 점수 스냅샷 (리그:내전 = 7:3 가중치, Grade.md 참고)
+    // 성적기반 배정 시점의 점수 스냅샷 (리그:내전 가중치는 Grade.md 참고, 실제 비율은
+    // convex/innerwars.ts의 SCORE_WEIGHT_LEAGUE/SCORE_WEIGHT_INNERWAR 상수가 정답)
     // 랜덤/수동 배정 시에는 초기화되어 undefined가 됨
     assignScore: v.optional(v.number()),
     assignLeagueRate: v.optional(v.number()),
@@ -82,6 +83,9 @@ export default defineSchema({
     assignRank: v.optional(v.number()),
     // 리그/내전 경기 기록이 전혀 없는 참가자인지 여부 — true면 배정 순위를 최하위로 고정
     assignHasHistory: v.optional(v.boolean()),
+    // 배정 당시 실제 경기 수 (0이면 화면에서 배점 대신 "-"로 표시)
+    assignLeagueGames: v.optional(v.number()),
+    assignInnerwarGames: v.optional(v.number()),
   })
     .index("by_innerwar", ["innerwarId"])
     .index("by_innerwar_and_user", ["innerwarId", "userId"])

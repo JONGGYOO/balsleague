@@ -45,6 +45,14 @@ score         = leagueRate × 0.8 + innerwarRate × 0.2
 나오지만, 이 경우 점수와 무관하게 정렬 시 항상 맨 마지막으로 보냅니다
 (`assignHasHistory` 플래그로 구분). 결과 표에는 "(전적없음)"으로 표시됩니다.
 
+**리그·내전 중 한쪽만 기록이 없는 경우**도 마찬가지 문제가 있었습니다. 예를 들어
+내전만 뛰고 리그는 한 번도 안 뛴 사람은 리그 쪽 스무딩 값이 정확히 50%가 되는데,
+이걸 그대로 보여주면 "리그에서 실제로 50% 승률을 기록한 것"처럼 오해할 수
+있습니다. 그래서 배정 시점에 실제 리그 경기 수(`assignLeagueGames`)와 내전
+경기 수(`assignInnerwarGames`)도 함께 저장해두고, 결과 표에서 해당 항목의
+경기 수가 0이면 배점 대신 "-"로 표시합니다 (종합 점수는 스무딩이 의도한 대로
+정상 반영되므로 그대로 표시).
+
 ## 팀 분배 방식
 
 정렬된 순위를 `i % 2`로 기계적으로 교대 배정하지 않고, **그리디(탐욕) 방식**을
@@ -70,10 +78,13 @@ score         = leagueRate × 0.8 + innerwarRate × 0.2
 ## 관련 코드
 
 - `convex/innerwars.ts` — `assignTeamsByScore` (계산·배정 로직),
-  `SCORE_WEIGHT_LEAGUE` / `SCORE_WEIGHT_INNERWAR` / `SCORE_SMOOTHING_GAMES` (튜닝 상수)
+  `SCORE_WEIGHT_LEAGUE` / `SCORE_WEIGHT_INNERWAR` / `SCORE_SMOOTHING_GAMES` (튜닝 상수),
+  `getDetail`이 `scoreWeights`를 함께 반환 (화면 문구가 상수와 어긋나지 않도록)
 - `convex/schema.ts` — `innerwarParticipants`의 `assignScore` / `assignLeagueRate` /
-  `assignInnerwarRate` / `assignRank` / `assignHasHistory` (결과 스냅샷 필드)
-- `app/innerwars/[id]/page.tsx` — "성적기반 배정 결과" 표 렌더링
+  `assignInnerwarRate` / `assignRank` / `assignHasHistory` / `assignLeagueGames` /
+  `assignInnerwarGames` (결과 스냅샷 필드)
+- `app/innerwars/[id]/page.tsx` — "성적기반 배정 결과" 표 렌더링. 가중치 문구는
+  하드코딩하지 않고 `scoreWeights`를 그대로 표시
 
 ---
 

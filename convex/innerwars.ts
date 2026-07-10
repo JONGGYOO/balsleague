@@ -105,6 +105,8 @@ export const getDetail = query({
       participants: participantsWithUsers,
       matches: matchesWithPlayers.sort((a, b) => a.matchIndex - b.matchIndex),
       currentUser: currentUser ? { ...currentUser, effectiveRole: role } : null,
+      // 성적기반 배정 가중치 — 프론트에서 하드코딩 없이 항상 실제 값을 표시하기 위해 함께 반환
+      scoreWeights: { league: SCORE_WEIGHT_LEAGUE, innerwar: SCORE_WEIGHT_INNERWAR },
     };
   },
 });
@@ -273,6 +275,8 @@ export const assignTeamsRandom = mutation({
         assignInnerwarRate: undefined,
         assignRank: undefined,
         assignHasHistory: undefined,
+        assignLeagueGames: undefined,
+        assignInnerwarGames: undefined,
       });
     }
 
@@ -328,7 +332,14 @@ export const assignTeamsByScore = mutation({
 
     const detailByParticipant = new Map<
       string,
-      { score: number; leagueRate: number; innerwarRate: number; hasHistory: boolean }
+      {
+        score: number;
+        leagueRate: number;
+        innerwarRate: number;
+        hasHistory: boolean;
+        leagueGamesCount: number;
+        innerwarGamesCount: number;
+      }
     >();
     for (const p of approved) {
       const leagueGames = allLeagueScores.filter(
@@ -352,6 +363,8 @@ export const assignTeamsByScore = mutation({
         leagueRate,
         innerwarRate,
         hasHistory: leagueGames.length > 0 || innerwarGames.length > 0,
+        leagueGamesCount: leagueGames.length,
+        innerwarGamesCount: innerwarGames.length,
       });
     }
 
@@ -375,7 +388,7 @@ export const assignTeamsByScore = mutation({
       const p = sorted[i];
       const detail =
         detailByParticipant.get(p._id) ??
-        { score: 0, leagueRate: 0.5, innerwarRate: 0.5, hasHistory: false };
+        { score: 0, leagueRate: 0.5, innerwarRate: 0.5, hasHistory: false, leagueGamesCount: 0, innerwarGamesCount: 0 };
       let team: "A" | "B";
       if (orderA - orderB >= 1) team = "B";
       else if (orderB - orderA >= 1) team = "A";
@@ -393,6 +406,8 @@ export const assignTeamsByScore = mutation({
         assignInnerwarRate: detail.innerwarRate,
         assignRank: i + 1,
         assignHasHistory: detail.hasHistory,
+        assignLeagueGames: detail.leagueGamesCount,
+        assignInnerwarGames: detail.innerwarGamesCount,
       });
     }
 
@@ -442,6 +457,8 @@ export const setPlayerTeam = mutation({
         assignInnerwarRate: _air,
         assignRank: _ar,
         assignHasHistory: _ah,
+        assignLeagueGames: _alg,
+        assignInnerwarGames: _aig,
         ...rest
       } = participant;
       await ctx.db.replace(args.participantId, rest);
@@ -467,6 +484,8 @@ export const setPlayerTeam = mutation({
       assignInnerwarRate: undefined,
       assignRank: undefined,
       assignHasHistory: undefined,
+      assignLeagueGames: undefined,
+      assignInnerwarGames: undefined,
     });
   },
 });
@@ -813,6 +832,8 @@ export const resetTeams = mutation({
         assignInnerwarRate: _air,
         assignRank: _ar,
         assignHasHistory: _ah,
+        assignLeagueGames: _alg,
+        assignInnerwarGames: _aig,
         ...rest
       } = p;
       await ctx.db.replace(p._id, rest);

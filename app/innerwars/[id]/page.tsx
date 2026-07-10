@@ -1008,7 +1008,11 @@ export default function InnerwarDetailPage() {
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-100">
               <h3 className="text-base font-semibold text-gray-900">성적기반 배정 결과</h3>
-              <p className="text-xs text-gray-400 mt-0.5">리그 70% + 내전 30% 가중치로 산출한 순위입니다</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {/* 가중치를 하드코딩하지 않고 서버 값을 그대로 표시 (값이 바뀌어도 항상 최신) */}
+                리그 {Math.round((detail?.scoreWeights?.league ?? 0) * 100)}% + 내전{" "}
+                {Math.round((detail?.scoreWeights?.innerwar ?? 0) * 100)}% 가중치로 산출한 순위입니다
+              </p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -1039,10 +1043,19 @@ export default function InnerwarDetailPage() {
                         }`}>{p.team}</span>
                       </td>
                       <td className="px-4 py-3 text-center text-gray-600">
-                        {p.assignHasHistory === false ? "-" : `${Math.round((p.assignLeagueRate ?? 0) * 100)}%`}
+                        {/* 리그 경기 기록이 0경기면 스무딩 중간값(50%)이 실제 성적처럼 보이지 않도록 "-" 표시 */}
+                        {(p.assignLeagueGames ?? 0) === 0 ? (
+                          <span className="text-gray-300">-</span>
+                        ) : (
+                          `${Math.round((p.assignLeagueRate ?? 0) * 100)}%`
+                        )}
                       </td>
                       <td className="px-4 py-3 text-center text-gray-600">
-                        {p.assignHasHistory === false ? "-" : `${Math.round((p.assignInnerwarRate ?? 0) * 100)}%`}
+                        {(p.assignInnerwarGames ?? 0) === 0 ? (
+                          <span className="text-gray-300">-</span>
+                        ) : (
+                          `${Math.round((p.assignInnerwarRate ?? 0) * 100)}%`
+                        )}
                       </td>
                       <td className="px-4 py-3 text-center font-bold text-gray-900">
                         {p.assignHasHistory === false ? "-" : `${Math.round((p.assignScore ?? 0) * 100)}%`}
