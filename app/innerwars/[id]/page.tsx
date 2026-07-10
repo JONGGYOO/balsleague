@@ -81,6 +81,16 @@ export default function InnerwarDetailPage() {
     [approvedParticipants]
   );
 
+  // 성적기반 배정 시점의 순위/배점 스냅샷 (리그:내전 = 7:3, Grade.md 참고)
+  // 랜덤/수동 배정 시에는 서버에서 스냅샷이 제거되므로 자연히 빈 배열이 됨
+  const scoreRanking = useMemo(
+    () =>
+      approvedParticipants
+        .filter((p) => p.assignRank !== undefined)
+        .sort((a, b) => (a.assignRank ?? 0) - (b.assignRank ?? 0)),
+    [approvedParticipants]
+  );
+
   const myParticipation = useMemo(
     () => currentUser ? allParticipants.find((p) => p.userId === currentUser._id) : null,
     [allParticipants, currentUser]
@@ -985,6 +995,52 @@ export default function InnerwarDetailPage() {
                       <td className="px-4 py-3 text-center text-red-500">{s.losses}</td>
                       <td className="px-4 py-3 text-center text-gray-700">{s.scored}</td>
                       <td className="px-4 py-3 text-center text-gray-400">{s.conceded}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* 성적기반 배정 결과 — 팀 배정 화면보다 아래, 페이지 맨 아래쪽에 배치 (Grade.md 참고) */}
+        {scoreRanking.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h3 className="text-base font-semibold text-gray-900">성적기반 배정 결과</h3>
+              <p className="text-xs text-gray-400 mt-0.5">리그 70% + 내전 30% 가중치로 산출한 순위입니다</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 text-xs font-medium text-gray-500 uppercase">
+                    <th className="px-4 py-3 text-center w-10">순위</th>
+                    <th className="px-4 py-3 text-left">선수</th>
+                    <th className="px-4 py-3 text-center w-12">팀</th>
+                    <th className="px-4 py-3 text-center w-16">리그 배점</th>
+                    <th className="px-4 py-3 text-center w-16">내전 배점</th>
+                    <th className="px-4 py-3 text-center w-16">종합 점수</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {scoreRanking.map((p) => (
+                    <tr key={p._id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-center text-gray-400">{p.assignRank}</td>
+                      <td className="px-4 py-3 font-medium text-gray-900">{displayName(p.user)}</td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
+                          p.team === "A" ? "bg-blue-100 text-blue-700" : "bg-red-100 text-red-700"
+                        }`}>{p.team}</span>
+                      </td>
+                      <td className="px-4 py-3 text-center text-gray-600">
+                        {Math.round((p.assignLeagueRate ?? 0) * 100)}%
+                      </td>
+                      <td className="px-4 py-3 text-center text-gray-600">
+                        {Math.round((p.assignInnerwarRate ?? 0) * 100)}%
+                      </td>
+                      <td className="px-4 py-3 text-center font-bold text-gray-900">
+                        {Math.round((p.assignScore ?? 0) * 100)}%
+                      </td>
                     </tr>
                   ))}
                 </tbody>

@@ -264,7 +264,15 @@ export const assignTeamsRandom = mutation({
     for (let i = 0; i < shuffled.length; i++) {
       const team: "A" | "B" = i < half ? "A" : "B";
       const teamOrder = i < half ? i : i - half;
-      await ctx.db.patch(shuffled[i]._id, { team, teamOrder });
+      // 랜덤 배정이므로 이전 성적기반 배정 스냅샷(있다면)은 제거
+      await ctx.db.patch(shuffled[i]._id, {
+        team,
+        teamOrder,
+        assignScore: undefined,
+        assignLeagueRate: undefined,
+        assignInnerwarRate: undefined,
+        assignRank: undefined,
+      });
     }
 
     const existingMatches = await ctx.db
@@ -317,7 +325,10 @@ export const assignTeamsByScore = mutation({
     const allInnerwarMatches = await ctx.db.query("innerwarMatches").take(5000);
     const doneInnerwarMatches = allInnerwarMatches.filter((m) => m.status === "done");
 
-    const scoreByParticipant = new Map<string, number>();
+    const detailByParticipant = new Map<
+      string,
+      { score: number; leagueRate: number; innerwarRate: number }
+    >();
     for (const p of approved) {
       const leagueGames = allLeagueScores.filter(
         (s) => s.homeUserId === p.userId || s.awayUserId === p.userId
@@ -335,14 +346,16 @@ export const assignTeamsByScore = mutation({
       const innerwarWins = innerwarGames.filter((m) => m.winnerId === p.userId).length;
       const innerwarRate = smoothedWinRate(innerwarWins, innerwarGames.length, SCORE_SMOOTHING_GAMES);
 
-      scoreByParticipant.set(
-        p._id,
-        leagueRate * SCORE_WEIGHT_LEAGUE + innerwarRate * SCORE_WEIGHT_INNERWAR
-      );
+      detailByParticipant.set(p._id, {
+        score: leagueRate * SCORE_WEIGHT_LEAGUE + innerwarRate * SCORE_WEIGHT_INNERWAR,
+        leagueRate,
+        innerwarRate,
+      });
     }
 
     const sorted = [...approved].sort(
-      (a, b) => (scoreByParticipant.get(b._id) ?? 0) - (scoreByParticipant.get(a._id) ?? 0)
+      (a, b) =>
+        (detailByParticipant.get(b._id)?.score ?? 0) - (detailByParticipant.get(a._id)?.score ?? 0)
     );
 
     // 그리디 팀 분배: 인원 수 차이가 나면 적은 쪽 우선, 같으면 합산 점수가 낮은 쪽에 배정
@@ -353,16 +366,24 @@ export const assignTeamsByScore = mutation({
     let totalB = 0;
     for (let i = 0; i < sorted.length; i++) {
       const p = sorted[i];
-      const score = scoreByParticipant.get(p._id) ?? 0;
+      const detail = detailByParticipant.get(p._id) ?? { score: 0, leagueRate: 0.5, innerwarRate: 0.5 };
       let team: "A" | "B";
       if (orderA - orderB >= 1) team = "B";
       else if (orderB - orderA >= 1) team = "A";
       else team = totalA <= totalB ? "A" : "B";
 
       const teamOrder = team === "A" ? orderA++ : orderB++;
-      if (team === "A") totalA += score;
-      else totalB += score;
-      await ctx.db.patch(p._id, { team, teamOrder });
+      if (team === "A") totalA += detail.score;
+      else totalB += detail.score;
+      // 순위/배점 표시용 스냅샷 저장 (Grade.md — 성적기반 배정 결과 화면)
+      await ctx.db.patch(p._id, {
+        team,
+        teamOrder,
+        assignScore: detail.score,
+        assignLeagueRate: detail.leagueRate,
+        assignInnerwarRate: detail.innerwarRate,
+        assignRank: i + 1,
+      });
     }
 
     const existingMatches = await ctx.db
@@ -403,7 +424,15 @@ export const setPlayerTeam = mutation({
     }
 
     if (args.team === "none") {
-      const { team: _t, teamOrder: _o, ...rest } = participant;
+      const {
+        team: _t,
+        teamOrder: _o,
+        assignScore: _as,
+        assignLeagueRate: _alr,
+        assignInnerwarRate: _air,
+        assignRank: _ar,
+        ...rest
+      } = participant;
       await ctx.db.replace(args.participantId, rest);
       return;
     }
@@ -418,7 +447,15 @@ export const setPlayerTeam = mutation({
     );
     const maxOrder = teamMembers.reduce((max, p) => Math.max(max, p.teamOrder ?? -1), -1);
 
-    await ctx.db.patch(args.participantId, { team: args.team, teamOrder: maxOrder + 1 });
+    // 수동 배정이므로 이전 성적기반 배정 스냅샷(있다면)은 제거
+    await ctx.db.patch(args.participantId, {
+      team: args.team,
+      teamOrder: maxOrder + 1,
+      assignScore: undefined,
+      assignLeagueRate: undefined,
+      assignInnerwarRate: undefined,
+      assignRank: undefined,
+    });
   },
 });
 
@@ -756,7 +793,15 @@ export const resetTeams = mutation({
       .take(200);
 
     for (const p of allParticipants) {
-      const { team: _t, teamOrder: _o, ...rest } = p;
+      const {
+        team: _t,
+        teamOrder: _o,
+        assignScore: _as,
+        assignLeagueRate: _alr,
+        assignInnerwarRate: _air,
+        assignRank: _ar,
+        ...rest
+      } = p;
       await ctx.db.replace(p._id, rest);
     }
 

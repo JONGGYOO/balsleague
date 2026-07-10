@@ -74,6 +74,12 @@ export default defineSchema({
     status: v.optional(v.union(v.literal("pending"), v.literal("approved"))),
     team: v.optional(v.union(v.literal("A"), v.literal("B"))),
     teamOrder: v.optional(v.number()),
+    // 성적기반 배정 시점의 점수 스냅샷 (리그:내전 = 7:3 가중치, Grade.md 참고)
+    // 랜덤/수동 배정 시에는 초기화되어 undefined가 됨
+    assignScore: v.optional(v.number()),
+    assignLeagueRate: v.optional(v.number()),
+    assignInnerwarRate: v.optional(v.number()),
+    assignRank: v.optional(v.number()),
   })
     .index("by_innerwar", ["innerwarId"])
     .index("by_innerwar_and_user", ["innerwarId", "userId"])
