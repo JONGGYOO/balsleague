@@ -1026,20 +1026,26 @@ export default function InnerwarDetailPage() {
                   {scoreRanking.map((p) => (
                     <tr key={p._id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-center text-gray-400">{p.assignRank}</td>
-                      <td className="px-4 py-3 font-medium text-gray-900">{displayName(p.user)}</td>
+                      <td className="px-4 py-3 font-medium text-gray-900">
+                        {displayName(p.user)}
+                        {/* 리그·내전 경기를 한 번도 하지 않아 최하위로 배치된 참가자 표시 */}
+                        {p.assignHasHistory === false && (
+                          <span className="ml-1.5 text-[10px] font-normal text-gray-400">(전적없음)</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-center">
                         <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
                           p.team === "A" ? "bg-blue-100 text-blue-700" : "bg-red-100 text-red-700"
                         }`}>{p.team}</span>
                       </td>
                       <td className="px-4 py-3 text-center text-gray-600">
-                        {Math.round((p.assignLeagueRate ?? 0) * 100)}%
+                        {p.assignHasHistory === false ? "-" : `${Math.round((p.assignLeagueRate ?? 0) * 100)}%`}
                       </td>
                       <td className="px-4 py-3 text-center text-gray-600">
-                        {Math.round((p.assignInnerwarRate ?? 0) * 100)}%
+                        {p.assignHasHistory === false ? "-" : `${Math.round((p.assignInnerwarRate ?? 0) * 100)}%`}
                       </td>
                       <td className="px-4 py-3 text-center font-bold text-gray-900">
-                        {Math.round((p.assignScore ?? 0) * 100)}%
+                        {p.assignHasHistory === false ? "-" : `${Math.round((p.assignScore ?? 0) * 100)}%`}
                       </td>
                     </tr>
                   ))}

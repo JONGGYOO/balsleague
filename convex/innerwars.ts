@@ -272,6 +272,7 @@ export const assignTeamsRandom = mutation({
         assignLeagueRate: undefined,
         assignInnerwarRate: undefined,
         assignRank: undefined,
+        assignHasHistory: undefined,
       });
     }
 
@@ -327,7 +328,7 @@ export const assignTeamsByScore = mutation({
 
     const detailByParticipant = new Map<
       string,
-      { score: number; leagueRate: number; innerwarRate: number }
+      { score: number; leagueRate: number; innerwarRate: number; hasHistory: boolean }
     >();
     for (const p of approved) {
       const leagueGames = allLeagueScores.filter(
@@ -350,13 +351,19 @@ export const assignTeamsByScore = mutation({
         score: leagueRate * SCORE_WEIGHT_LEAGUE + innerwarRate * SCORE_WEIGHT_INNERWAR,
         leagueRate,
         innerwarRate,
+        hasHistory: leagueGames.length > 0 || innerwarGames.length > 0,
       });
     }
 
-    const sorted = [...approved].sort(
-      (a, b) =>
-        (detailByParticipant.get(b._id)?.score ?? 0) - (detailByParticipant.get(a._id)?.score ?? 0)
-    );
+    // 리그·내전 경기를 한 번도 하지 않은 참가자는 점수와 무관하게 항상 최하위로 배치
+    const sorted = [...approved].sort((a, b) => {
+      const da = detailByParticipant.get(a._id);
+      const db = detailByParticipant.get(b._id);
+      const aHas = da?.hasHistory ?? false;
+      const bHas = db?.hasHistory ?? false;
+      if (aHas !== bHas) return aHas ? -1 : 1;
+      return (db?.score ?? 0) - (da?.score ?? 0);
+    });
 
     // 그리디 팀 분배: 인원 수 차이가 나면 적은 쪽 우선, 같으면 합산 점수가 낮은 쪽에 배정
     // (Grade.md 3-3) — 정렬 순서를 기계적으로 교대하는 것보다 두 팀의 총 실력을 더 고르게 맞춘다.
@@ -366,7 +373,9 @@ export const assignTeamsByScore = mutation({
     let totalB = 0;
     for (let i = 0; i < sorted.length; i++) {
       const p = sorted[i];
-      const detail = detailByParticipant.get(p._id) ?? { score: 0, leagueRate: 0.5, innerwarRate: 0.5 };
+      const detail =
+        detailByParticipant.get(p._id) ??
+        { score: 0, leagueRate: 0.5, innerwarRate: 0.5, hasHistory: false };
       let team: "A" | "B";
       if (orderA - orderB >= 1) team = "B";
       else if (orderB - orderA >= 1) team = "A";
@@ -383,6 +392,7 @@ export const assignTeamsByScore = mutation({
         assignLeagueRate: detail.leagueRate,
         assignInnerwarRate: detail.innerwarRate,
         assignRank: i + 1,
+        assignHasHistory: detail.hasHistory,
       });
     }
 
@@ -431,6 +441,7 @@ export const setPlayerTeam = mutation({
         assignLeagueRate: _alr,
         assignInnerwarRate: _air,
         assignRank: _ar,
+        assignHasHistory: _ah,
         ...rest
       } = participant;
       await ctx.db.replace(args.participantId, rest);
@@ -455,6 +466,7 @@ export const setPlayerTeam = mutation({
       assignLeagueRate: undefined,
       assignInnerwarRate: undefined,
       assignRank: undefined,
+      assignHasHistory: undefined,
     });
   },
 });
@@ -800,6 +812,7 @@ export const resetTeams = mutation({
         assignLeagueRate: _alr,
         assignInnerwarRate: _air,
         assignRank: _ar,
+        assignHasHistory: _ah,
         ...rest
       } = p;
       await ctx.db.replace(p._id, rest);

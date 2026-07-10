@@ -80,6 +80,8 @@ export default defineSchema({
     assignLeagueRate: v.optional(v.number()),
     assignInnerwarRate: v.optional(v.number()),
     assignRank: v.optional(v.number()),
+    // 리그/내전 경기 기록이 전혀 없는 참가자인지 여부 — true면 배정 순위를 최하위로 고정
+    assignHasHistory: v.optional(v.boolean()),
   })
     .index("by_innerwar", ["innerwarId"])
     .index("by_innerwar_and_user", ["innerwarId", "userId"])
