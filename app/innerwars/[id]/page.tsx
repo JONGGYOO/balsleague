@@ -29,6 +29,7 @@ export default function InnerwarDetailPage() {
   const saveMatchScore = useMutation(api.innerwars.saveMatchScore);
   const confirmMatchResult = useMutation(api.innerwars.confirmMatchResult);
   const resetTeams = useMutation(api.innerwars.resetTeams);
+  const removeUnplayedParticipant = useMutation(api.innerwars.removeUnplayedParticipant);
 
   const [scoreA, setScoreA] = useState("0");
   const [scoreB, setScoreB] = useState("0");
@@ -39,6 +40,7 @@ export default function InnerwarDetailPage() {
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
   const [reordering, setReordering] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
   // 5-2: 전원 배정 완료 시 그리드 뷰 / 목록 뷰 전환
   const [showListView, setShowListView] = useState(false);
@@ -180,6 +182,19 @@ export default function InnerwarDetailPage() {
     setReordering(participantId);
     try { await reorderTeamMember({ participantId, direction }); }
     finally { setReordering(null); }
+  }
+
+  // 9-1: 경기 진행 중, 아직 경기하지 않은 참가자를 관리자가 제외
+  async function handleRemoveParticipant(participantId: Id<"innerwarParticipants">, name: string) {
+    if (!confirm(`${name}님을 내전에서 제외할까요?`)) return;
+    setRemovingId(participantId);
+    try {
+      await removeUnplayedParticipant({ participantId });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "오류가 발생했습니다.");
+    } finally {
+      setRemovingId(null);
+    }
   }
 
   async function handleSaveScore(matchId: Id<"innerwarMatches">) {
@@ -385,12 +400,6 @@ export default function InnerwarDetailPage() {
               {innerwar.year}.{String(innerwar.month).padStart(2, "0")}.{String(innerwar.day).padStart(2, "0")}
             </span>
             <span className="text-lg font-bold text-gray-900">{innerwar.name}</span>
-            {/* 8-4: 내기 품목 표시 */}
-            {innerwar.betItem && (
-              <span className="ml-2 text-xs font-medium text-yellow-700 bg-yellow-50 rounded-full px-2 py-0.5">
-                🎁 {innerwar.betItem}
-              </span>
-            )}
           </div>
         </div>
         <div className="flex items-center gap-3 ml-3 shrink-0">
@@ -774,8 +783,19 @@ export default function InnerwarDetailPage() {
                           {idx + 1}. {displayName(p.user)}
                           {isPlaying && <span className="ml-1 text-xs">▶</span>}
                         </span>
-                        {/* 8-2: 아직 경기하지 않은 선수만 순번 변경 가능 */}
-                        {renderOrderButtons(p, idx, teamA.length, currentIdx, activeMatchScored)}
+                        <div className="flex items-center gap-1">
+                          {/* 8-2: 아직 경기하지 않은 선수만 순번 변경 가능 */}
+                          {renderOrderButtons(p, idx, teamA.length, currentIdx, activeMatchScored)}
+                          {/* 9-1: 아직 경기하지 않은 선수는 관리자가 제외 가능 */}
+                          {isManager && idx > currentIdx && (
+                            <button
+                              onClick={() => handleRemoveParticipant(p._id, displayName(p.user))}
+                              disabled={removingId === p._id}
+                              className="w-6 h-6 flex items-center justify-center rounded text-gray-300 hover:text-red-500 hover:bg-red-50 disabled:opacity-20 text-xs"
+                              title="제외"
+                            >✕</button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -795,8 +815,19 @@ export default function InnerwarDetailPage() {
                           {idx + 1}. {displayName(p.user)}
                           {isPlaying && <span className="ml-1 text-xs">▶</span>}
                         </span>
-                        {/* 8-2: 아직 경기하지 않은 선수만 순번 변경 가능 */}
-                        {renderOrderButtons(p, idx, teamB.length, currentIdx, activeMatchScored)}
+                        <div className="flex items-center gap-1">
+                          {/* 8-2: 아직 경기하지 않은 선수만 순번 변경 가능 */}
+                          {renderOrderButtons(p, idx, teamB.length, currentIdx, activeMatchScored)}
+                          {/* 9-1: 아직 경기하지 않은 선수는 관리자가 제외 가능 */}
+                          {isManager && idx > currentIdx && (
+                            <button
+                              onClick={() => handleRemoveParticipant(p._id, displayName(p.user))}
+                              disabled={removingId === p._id}
+                              className="w-6 h-6 flex items-center justify-center rounded text-gray-300 hover:text-red-500 hover:bg-red-50 disabled:opacity-20 text-xs"
+                              title="제외"
+                            >✕</button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -960,6 +991,13 @@ export default function InnerwarDetailPage() {
               </table>
             </div>
           </div>
+        )}
+
+        {/* 9-2: 내기 품목 표시 — 상단 대신 하단에 배치 (경기 종료 후에는 위쪽 전달 화면에 이미 표시됨) */}
+        {innerwar.betItem && status !== "done" && (
+          <p className="text-center text-xs text-gray-400 pt-1">
+            🎁 내기 품목: <span className="font-semibold text-gray-500">{innerwar.betItem}</span>
+          </p>
         )}
       </main>
     </div>

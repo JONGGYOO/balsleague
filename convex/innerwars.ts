@@ -734,3 +734,53 @@ export const resetTeams = mutation({
     await ctx.db.replace(args.innerwarId, { ...rest, status: "draft" });
   },
 });
+
+// 9-1: 경기 진행 중, 아직 경기하지 않은 참가자를 슈퍼관리자/관리자가 제외
+export const removeUnplayedParticipant = mutation({
+  args: { participantId: v.id("innerwarParticipants") },
+  handler: async (ctx, args) => {
+    const role = await getEffectiveRole(ctx);
+    if (role !== "superAdmin" && role !== "admin") throw new Error("권한이 없습니다.");
+
+    const participant = await ctx.db.get(args.participantId);
+    if (!participant) throw new Error("참가자를 찾을 수 없습니다.");
+
+    const innerwar = await ctx.db.get(participant.innerwarId);
+    if (!innerwar) throw new Error("내전을 찾을 수 없습니다.");
+    if (innerwar.status !== "inProgress") {
+      throw new Error("경기 진행 중에만 참가자를 제외할 수 있습니다.");
+    }
+
+    const team = participant.team;
+    if (!team) throw new Error("팀이 배정되지 않았습니다.");
+
+    const allInTeam = await ctx.db
+      .query("innerwarParticipants")
+      .withIndex("by_innerwar", (q) => q.eq("innerwarId", participant.innerwarId))
+      .take(200);
+
+    const teamMembers = allInTeam
+      .filter((p) => p.team === team)
+      .sort((a, b) => (a.teamOrder ?? 0) - (b.teamOrder ?? 0));
+
+    const idx = teamMembers.findIndex((p) => p._id === args.participantId);
+    if (idx === -1) return;
+
+    const currentIndexForTeam =
+      team === "A" ? (innerwar.currentIndexA ?? 0) : (innerwar.currentIndexB ?? 0);
+
+    if (idx <= currentIndexForTeam) {
+      throw new Error("이미 경기했거나 현재 경기 중인 선수는 제외할 수 없습니다.");
+    }
+
+    await ctx.db.delete(args.participantId);
+
+    // 제외된 선수 뒤의 순번을 당겨서 빈 자리 없이 재정렬
+    const remaining = teamMembers.filter((p) => p._id !== args.participantId);
+    for (let i = 0; i < remaining.length; i++) {
+      if ((remaining[i].teamOrder ?? i) !== i) {
+        await ctx.db.patch(remaining[i]._id, { teamOrder: i });
+      }
+    }
+  },
+});
