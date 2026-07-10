@@ -12,6 +12,8 @@ export const proxy = clerkMiddleware(async (auth, request) => {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)",
+    // public/ 폴더의 정적 파일(이미지 등)은 인증 미들웨어를 아예 거치지 않도록 확장자로 제외
+    // — 그렇지 않으면 OG 이미지(bals-logo.png) 같은 파일도 auth.protect()에 막혀 404가 됨
+    "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:png|jpe?g|gif|webp|svg|ico|avif|css|js|txt|xml|webmanifest)$).*)",
   ],
 };
