@@ -288,6 +288,16 @@ export const assignTeamsRandom = mutation({
 });
 
 // 4-3: teamAssignPermission 체크
+// Grade.md 참고: 리그:내전 = 7:3 가중치. 승수 대신 승률(+스무딩)을 사용해
+// 표본이 적은 선수가 과대/과소평가되는 것을 완화한다.
+const SCORE_WEIGHT_LEAGUE = 0.7;
+const SCORE_WEIGHT_INNERWAR = 0.3;
+const SCORE_SMOOTHING_GAMES = 4; // 스무딩 상수(K) — 클수록 표본 적은 선수를 0.5(중간값)에 가깝게 당김
+
+function smoothedWinRate(wins: number, games: number, k: number): number {
+  return (wins + k * 0.5) / (games + k);
+}
+
 export const assignTeamsByScore = mutation({
   args: { innerwarId: v.id("innerwars") },
   handler: async (ctx, args) => {
@@ -301,28 +311,58 @@ export const assignTeamsByScore = mutation({
     const approved = allParticipants.filter((p) => !p.status || p.status === "approved");
     if (approved.length < 2) throw new Error("최소 2명 이상이 필요합니다.");
 
-    const allScores = await ctx.db.query("scores").take(2000);
+    // 리그 전적 (전체 리그 통합)
+    const allLeagueScores = await ctx.db.query("scores").take(5000);
+    // 내전 전적 (전체 내전 통합, 완료된 경기만 — 현재 배정 중인 내전은 아직 경기가 없으므로 자연히 제외됨)
+    const allInnerwarMatches = await ctx.db.query("innerwarMatches").take(5000);
+    const doneInnerwarMatches = allInnerwarMatches.filter((m) => m.status === "done");
 
-    const winCounts = new Map<string, number>();
+    const scoreByParticipant = new Map<string, number>();
     for (const p of approved) {
-      const wins = allScores.filter(
+      const leagueGames = allLeagueScores.filter(
+        (s) => s.homeUserId === p.userId || s.awayUserId === p.userId
+      );
+      const leagueWins = leagueGames.filter(
         (s) =>
           (s.homeUserId === p.userId && s.homeScore > s.awayScore) ||
           (s.awayUserId === p.userId && s.awayScore > s.homeScore)
       ).length;
-      winCounts.set(p._id, wins);
+      const leagueRate = smoothedWinRate(leagueWins, leagueGames.length, SCORE_SMOOTHING_GAMES);
+
+      const innerwarGames = doneInnerwarMatches.filter(
+        (m) => m.playerAId === p.userId || m.playerBId === p.userId
+      );
+      const innerwarWins = innerwarGames.filter((m) => m.winnerId === p.userId).length;
+      const innerwarRate = smoothedWinRate(innerwarWins, innerwarGames.length, SCORE_SMOOTHING_GAMES);
+
+      scoreByParticipant.set(
+        p._id,
+        leagueRate * SCORE_WEIGHT_LEAGUE + innerwarRate * SCORE_WEIGHT_INNERWAR
+      );
     }
 
     const sorted = [...approved].sort(
-      (a, b) => (winCounts.get(b._id) ?? 0) - (winCounts.get(a._id) ?? 0)
+      (a, b) => (scoreByParticipant.get(b._id) ?? 0) - (scoreByParticipant.get(a._id) ?? 0)
     );
 
+    // 그리디 팀 분배: 인원 수 차이가 나면 적은 쪽 우선, 같으면 합산 점수가 낮은 쪽에 배정
+    // (Grade.md 3-3) — 정렬 순서를 기계적으로 교대하는 것보다 두 팀의 총 실력을 더 고르게 맞춘다.
     let orderA = 0;
     let orderB = 0;
+    let totalA = 0;
+    let totalB = 0;
     for (let i = 0; i < sorted.length; i++) {
-      const team: "A" | "B" = i % 2 === 0 ? "A" : "B";
+      const p = sorted[i];
+      const score = scoreByParticipant.get(p._id) ?? 0;
+      let team: "A" | "B";
+      if (orderA - orderB >= 1) team = "B";
+      else if (orderB - orderA >= 1) team = "A";
+      else team = totalA <= totalB ? "A" : "B";
+
       const teamOrder = team === "A" ? orderA++ : orderB++;
-      await ctx.db.patch(sorted[i]._id, { team, teamOrder });
+      if (team === "A") totalA += score;
+      else totalB += score;
+      await ctx.db.patch(p._id, { team, teamOrder });
     }
 
     const existingMatches = await ctx.db
