@@ -96,6 +96,8 @@ export default function InnerwarDetailPage() {
     () => matches.find((m) => m.status === "pending" || m.status === "scored"),
     [matches]
   );
+  // 8-2 추가: 점수가 아직 저장되지 않았다면(pending) 현재 경기 중인 선수도 순번 변경 허용
+  const activeMatchScored = activeMatch ? activeMatch.status === "scored" : true;
 
   // 5-1: 현재 경기 양쪽 선수 여부 — 관리자 아닌 경우에도 점수 입력 가능
   const isCurrentMatchPlayer = !!(
@@ -243,19 +245,26 @@ export default function InnerwarDetailPage() {
   }
 
   // 4-4: 모든 인증 사용자 순번 변경 가능
+  // 8-2: 경기 시작 후에도 아직 경기하지 않은 선수는 순번 변경 가능.
+  //      점수 저장 전(activeScored=false)이라면 현재 경기 중인 선수(minIdx)도 변경 가능,
+  //      점수가 저장되면 그 선수는 이미 경기를 진행한 것으로 보고 변경 불가.
   function renderOrderButtons(
     p: typeof approvedParticipants[0],
     idx: number,
-    teamLength: number
+    teamLength: number,
+    minIdx: number = -1,
+    activeScored: boolean = true
   ) {
     if (!isAuthenticated) return null;
     const st = innerwar?.status ?? "draft";
-    if (st === "inProgress" || st === "done") return null;
+    if (st === "done") return null;
+    const boundary = st === "inProgress" ? (activeScored ? minIdx : minIdx - 1) : -1;
+    if (idx <= boundary) return null;
     return (
       <div className="flex gap-0.5">
         <button
           onClick={() => handleReorder(p._id, "up")}
-          disabled={idx === 0 || reordering === p._id}
+          disabled={idx <= boundary + 1 || reordering === p._id}
           className="w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-20 text-xs"
         >▲</button>
         <button
@@ -376,6 +385,12 @@ export default function InnerwarDetailPage() {
               {innerwar.year}.{String(innerwar.month).padStart(2, "0")}.{String(innerwar.day).padStart(2, "0")}
             </span>
             <span className="text-lg font-bold text-gray-900">{innerwar.name}</span>
+            {/* 8-4: 내기 품목 표시 */}
+            {innerwar.betItem && (
+              <span className="ml-2 text-xs font-medium text-yellow-700 bg-yellow-50 rounded-full px-2 py-0.5">
+                🎁 {innerwar.betItem}
+              </span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-3 ml-3 shrink-0">
@@ -751,12 +766,16 @@ export default function InnerwarDetailPage() {
                     const isPlaying = idx === currentIdx;
                     const isEliminated = idx < currentIdx;
                     return (
-                      <div key={p._id} className={`text-sm py-0.5 ${
+                      <div key={p._id} className={`flex items-center justify-between gap-1 text-sm py-0.5 ${
                         isEliminated ? "text-gray-300 line-through" :
                         isPlaying ? "text-blue-700 font-bold" : "text-gray-600"
                       }`}>
-                        {idx + 1}. {displayName(p.user)}
-                        {isPlaying && <span className="ml-1 text-xs">▶</span>}
+                        <span>
+                          {idx + 1}. {displayName(p.user)}
+                          {isPlaying && <span className="ml-1 text-xs">▶</span>}
+                        </span>
+                        {/* 8-2: 아직 경기하지 않은 선수만 순번 변경 가능 */}
+                        {renderOrderButtons(p, idx, teamA.length, currentIdx, activeMatchScored)}
                       </div>
                     );
                   })}
@@ -768,12 +787,16 @@ export default function InnerwarDetailPage() {
                     const isPlaying = idx === currentIdx;
                     const isEliminated = idx < currentIdx;
                     return (
-                      <div key={p._id} className={`text-sm py-0.5 ${
+                      <div key={p._id} className={`flex items-center justify-between gap-1 text-sm py-0.5 ${
                         isEliminated ? "text-gray-300 line-through" :
                         isPlaying ? "text-red-700 font-bold" : "text-gray-600"
                       }`}>
-                        {idx + 1}. {displayName(p.user)}
-                        {isPlaying && <span className="ml-1 text-xs">▶</span>}
+                        <span>
+                          {idx + 1}. {displayName(p.user)}
+                          {isPlaying && <span className="ml-1 text-xs">▶</span>}
+                        </span>
+                        {/* 8-2: 아직 경기하지 않은 선수만 순번 변경 가능 */}
+                        {renderOrderButtons(p, idx, teamB.length, currentIdx, activeMatchScored)}
                       </div>
                     );
                   })}

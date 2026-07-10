@@ -280,6 +280,12 @@ export default function InnerwarsPage() {
                           <InnerwarLabel innerwar={w} />
                         </Link>
                         <div className="flex items-center gap-2 mt-1">
+                          {/* 8-4: 내기 품목 표시 */}
+                          {w.betItem && (
+                            <span className="text-xs text-yellow-700 bg-yellow-50 px-2 py-0.5 rounded-full">
+                              🎁 {w.betItem}
+                            </span>
+                          )}
                           {w.status && w.status !== "draft" && (
                             <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${
                               w.status === "done"

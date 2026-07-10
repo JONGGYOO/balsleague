@@ -1,7 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { MutationCtx } from "./_generated/server";
-import { Id } from "./_generated/dataModel";
+import { Doc, Id } from "./_generated/dataModel";
 import { getEffectiveRole, getOrCreateUser, SUPER_ADMIN_EMAIL } from "./utils";
 
 // 4-3: 팀 배정/초기화 권한 체크 헬퍼
@@ -383,6 +383,10 @@ export const setPlayerTeam = mutation({
 });
 
 // 3-2 / 4-4: 모든 사용자가 순번 변경 가능
+// 8-2: 경기 시작(inProgress) 후에도 아직 경기하지 않은 선수는 순번 변경 가능.
+//      현재 경기 중인(활성 슬롯) 선수는 점수 저장 전까지만 변경 가능하며,
+//      이 경우 진행 중인 매치의 선수 참조도 함께 갱신한다. 이미 경기를 마쳤거나
+//      점수가 저장된 선수는 순번 변경 불가.
 export const reorderTeamMember = mutation({
   args: {
     participantId: v.id("innerwarParticipants"),
@@ -396,8 +400,8 @@ export const reorderTeamMember = mutation({
     if (!participant) throw new Error("참가자를 찾을 수 없습니다.");
 
     const innerwar = await ctx.db.get(participant.innerwarId);
-    if (innerwar?.status === "inProgress" || innerwar?.status === "done") {
-      throw new Error("경기 시작 후에는 순번을 변경할 수 없습니다.");
+    if (innerwar?.status === "done") {
+      throw new Error("경기가 종료되어 순번을 변경할 수 없습니다.");
     }
 
     const team = participant.team;
@@ -418,6 +422,32 @@ export const reorderTeamMember = mutation({
     const targetIdx = args.direction === "up" ? currentIdx - 1 : currentIdx + 1;
     if (targetIdx < 0 || targetIdx >= teamMembers.length) return;
 
+    let activeMatchToUpdate: Doc<"innerwarMatches"> | null = null;
+    let currentIndexForTeam = -1;
+
+    if (innerwar?.status === "inProgress") {
+      currentIndexForTeam =
+        team === "A" ? (innerwar.currentIndexA ?? 0) : (innerwar.currentIndexB ?? 0);
+
+      // 이미 경기를 마친(탈락한) 선수 자리는 관여 불가
+      if (currentIdx < currentIndexForTeam || targetIdx < currentIndexForTeam) {
+        throw new Error("이미 경기를 진행한 선수는 순번을 변경할 수 없습니다.");
+      }
+
+      // 현재 경기 중인 활성 슬롯이 관여되면, 점수가 아직 저장되지 않은 경우에만 허용
+      if (currentIdx === currentIndexForTeam || targetIdx === currentIndexForTeam) {
+        const matches = await ctx.db
+          .query("innerwarMatches")
+          .withIndex("by_innerwar", (q) => q.eq("innerwarId", participant.innerwarId))
+          .take(500);
+        const active = matches.find((m) => m.status === "pending" || m.status === "scored") ?? null;
+        if (!active || active.status === "scored") {
+          throw new Error("이미 점수를 저장한 선수는 순번을 변경할 수 없습니다.");
+        }
+        activeMatchToUpdate = active;
+      }
+    }
+
     const current = teamMembers[currentIdx];
     const target = teamMembers[targetIdx];
 
@@ -426,6 +456,16 @@ export const reorderTeamMember = mutation({
 
     await ctx.db.patch(current._id, { teamOrder: targetOrder });
     await ctx.db.patch(target._id, { teamOrder: currentOrder });
+
+    if (activeMatchToUpdate) {
+      const newActiveParticipant = currentIdx === currentIndexForTeam ? target : current;
+      await ctx.db.patch(
+        activeMatchToUpdate._id,
+        team === "A"
+          ? { playerAId: newActiveParticipant.userId }
+          : { playerBId: newActiveParticipant.userId }
+      );
+    }
   },
 });
 
