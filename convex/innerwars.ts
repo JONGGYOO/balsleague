@@ -326,9 +326,17 @@ export const assignTeamsByScore = mutation({
 
     // 리그 전적 (전체 리그 통합)
     const allLeagueScores = await ctx.db.query("scores").take(5000);
-    // 내전 전적 (전체 내전 통합, 완료된 경기만 — 현재 배정 중인 내전은 아직 경기가 없으므로 자연히 제외됨)
+    // 내전 전적 (삭제되지 않은 내전만 통합, 완료된 경기만 — 현재 배정 중인 내전은
+    // 아직 경기가 없으므로 자연히 제외됨). 삭제된(테스트용 등) 내전의 경기 기록이
+    // 점수 계산에 섞여 들어가는 것을 방지한다.
+    const allInnerwars = await ctx.db.query("innerwars").take(2000);
+    const validInnerwarIds = new Set(
+      allInnerwars.filter((w) => !w.deletedAt).map((w) => w._id)
+    );
     const allInnerwarMatches = await ctx.db.query("innerwarMatches").take(5000);
-    const doneInnerwarMatches = allInnerwarMatches.filter((m) => m.status === "done");
+    const doneInnerwarMatches = allInnerwarMatches.filter(
+      (m) => m.status === "done" && validInnerwarIds.has(m.innerwarId)
+    );
 
     const detailByParticipant = new Map<
       string,

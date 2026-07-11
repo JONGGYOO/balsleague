@@ -45,8 +45,12 @@ score = 리그·내전 기록이 둘 다 있으면   leagueRate × 0.8 + innerwa
   0.5에 가깝게 당겨져서, 표본이 적은 선수가 과대/과소평가되는 것을 막습니다.
 - `leagueGames` / `leagueWins`: 전체 리그(모든 시즌 통합) 기준 총 경기 수 / 승수
   (`scores` 테이블, leagueId 구분 없이 전체 합산)
-- `innerwarGames` / `innerwarWins`: 전체 내전(현재 배정 중인 내전 제외) 기준
-  완료된(`status: "done"`) 경기 수 / 승수 (`innerwarMatches` 테이블)
+- `innerwarGames` / `innerwarWins`: **삭제되지 않은** 내전 전체(현재 배정 중인
+  내전 제외) 기준 완료된(`status: "done"`) 경기 수 / 승수 (`innerwarMatches` 테이블).
+  소프트 삭제된 내전(`deletedAt` 있음, 예: 테스트용으로 만들었다 지운 내전)의
+  경기 기록은 제외한다 — 삭제해서 화면에는 안 보이는 내전의 경기 결과가 점수
+  계산에 몰래 섞여 들어가는 버그가 실제로 있었다 (테스트 데이터 잔여 기록 때문에
+  내전을 한 번도 안 한 선수에게 배점이 붙는 현상으로 발견됨).
 - 가중치 `0.8 : 0.2`는 `SCORE_WEIGHT_LEAGUE` / `SCORE_WEIGHT_INNERWAR` 상수로
   분리되어 있어 나중에 비율만 바꿔서 튜닝 가능합니다.
 
