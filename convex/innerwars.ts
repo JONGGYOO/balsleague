@@ -358,8 +358,22 @@ export const assignTeamsByScore = mutation({
       const innerwarWins = innerwarGames.filter((m) => m.winnerId === p.userId).length;
       const innerwarRate = smoothedWinRate(innerwarWins, innerwarGames.length, SCORE_SMOOTHING_GAMES);
 
+      // 한쪽 기록이 아예 없으면 그 쪽을 0.5(중간값)로 가정해 섞지 않고, 있는 기록만으로
+      // 점수를 매긴다. (예: 리그 기록이 없는 선수를 리그 0.5 × 80%로 채워 넣으면, 리그에서
+      // 실제로 평균 이하 성적을 낸 선수보다 오히려 높게 나오는 왜곡이 생김 — 버그 리포트로 확인됨)
+      let score: number;
+      if (leagueGames.length > 0 && innerwarGames.length > 0) {
+        score = leagueRate * SCORE_WEIGHT_LEAGUE + innerwarRate * SCORE_WEIGHT_INNERWAR;
+      } else if (leagueGames.length > 0) {
+        score = leagueRate;
+      } else if (innerwarGames.length > 0) {
+        score = innerwarRate;
+      } else {
+        score = 0.5; // 어차피 hasHistory=false로 항상 최하위 처리되므로 값 자체는 의미 없음
+      }
+
       detailByParticipant.set(p._id, {
-        score: leagueRate * SCORE_WEIGHT_LEAGUE + innerwarRate * SCORE_WEIGHT_INNERWAR,
+        score,
         leagueRate,
         innerwarRate,
         hasHistory: leagueGames.length > 0 || innerwarGames.length > 0,
