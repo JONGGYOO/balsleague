@@ -7,6 +7,7 @@ import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState, useMemo } from "react";
+import { WinBadge } from "@/app/components/WinBadge";
 
 function displayName(user: { name?: string; nickname?: string } | null | undefined): string {
   if (!user) return "알 수 없음";
@@ -30,6 +31,8 @@ export default function InnerwarDetailPage() {
   const confirmMatchResult = useMutation(api.innerwars.confirmMatchResult);
   const resetTeams = useMutation(api.innerwars.resetTeams);
   const removeUnplayedParticipant = useMutation(api.innerwars.removeUnplayedParticipant);
+  const editLastMatch = useMutation(api.innerwars.editLastMatch);
+  const toggleOrderLock = useMutation(api.innerwars.toggleOrderLock);
 
   const [scoreA, setScoreA] = useState("0");
   const [scoreB, setScoreB] = useState("0");
@@ -37,9 +40,16 @@ export default function InnerwarDetailPage() {
   const [confirming, setConfirming] = useState(false);
   const [editingScore, setEditingScore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 바로 이전(가장 최근 확정) 경기 점수 수정
+  const [editingPrev, setEditingPrev] = useState(false);
+  const [prevScoreA, setPrevScoreA] = useState("0");
+  const [prevScoreB, setPrevScoreB] = useState("0");
+  const [prevSaving, setPrevSaving] = useState(false);
+  const [prevError, setPrevError] = useState<string | null>(null);
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
   const [reordering, setReordering] = useState<string | null>(null);
+  const [lockingId, setLockingId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
   // 5-2: 전원 배정 완료 시 그리드 뷰 / 목록 뷰 전환
@@ -110,6 +120,18 @@ export default function InnerwarDetailPage() {
   );
   // 8-2 추가: 점수가 아직 저장되지 않았다면(pending) 현재 경기 중인 선수도 순번 변경 허용
   const activeMatchScored = activeMatch ? activeMatch.status === "scored" : true;
+
+  // 바로 이전(가장 최근 확정) 경기 수정 가능 여부 — 다음 경기가 아직 점수 입력 전(pending)이거나
+  // 없을 때(토너먼트 완전 종료 직후)만 허용. completedMatches는 matchIndex 오름차순이므로 마지막 원소가 최신 경기.
+  const lastCompletedMatch = completedMatches[completedMatches.length - 1] ?? null;
+  const canEditLastMatch = !!(
+    lastCompletedMatch &&
+    (!activeMatch || activeMatch.status === "pending") &&
+    (isManager ||
+      (currentUser &&
+        (lastCompletedMatch.playerAId === currentUser._id ||
+          lastCompletedMatch.playerBId === currentUser._id)))
+  );
 
   // 5-1: 현재 경기 양쪽 선수 여부 — 관리자 아닌 경우에도 점수 입력 가능
   const isCurrentMatchPlayer = !!(
@@ -194,6 +216,17 @@ export default function InnerwarDetailPage() {
     finally { setReordering(null); }
   }
 
+  async function handleToggleLock(participantId: Id<"innerwarParticipants">) {
+    setLockingId(participantId);
+    try {
+      await toggleOrderLock({ participantId });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "오류가 발생했습니다.");
+    } finally {
+      setLockingId(null);
+    }
+  }
+
   // 9-1: 경기 진행 중, 아직 경기하지 않은 참가자를 관리자가 제외
   async function handleRemoveParticipant(participantId: Id<"innerwarParticipants">, name: string) {
     if (!confirm(`${name}님을 내전에서 제외할까요?`)) return;
@@ -248,6 +281,34 @@ export default function InnerwarDetailPage() {
     setError(null);
   }
 
+  function startEditPrev() {
+    if (!lastCompletedMatch) return;
+    setPrevScoreA(String(lastCompletedMatch.scoreA ?? 0));
+    setPrevScoreB(String(lastCompletedMatch.scoreB ?? 0));
+    setPrevError(null);
+    setEditingPrev(true);
+  }
+
+  async function handleSavePrevMatch() {
+    if (!lastCompletedMatch) return;
+    const sA = parseInt(prevScoreA, 10);
+    const sB = parseInt(prevScoreB, 10);
+    if (isNaN(sA) || isNaN(sB) || sA < 0 || sB < 0) {
+      setPrevError("유효한 점수를 입력하세요.");
+      return;
+    }
+    setPrevSaving(true);
+    setPrevError(null);
+    try {
+      await editLastMatch({ matchId: lastCompletedMatch._id, scoreA: sA, scoreB: sB });
+      setEditingPrev(false);
+    } catch (err) {
+      setPrevError(err instanceof Error ? err.message : "오류가 발생했습니다.");
+    } finally {
+      setPrevSaving(false);
+    }
+  }
+
   async function handleReset() {
     const gameStarted = status === "inProgress" || status === "done";
     if (gameStarted && !isManager) {
@@ -283,6 +344,14 @@ export default function InnerwarDetailPage() {
     if (!isAuthenticated) return null;
     const st = innerwar?.status ?? "draft";
     if (st === "done") return null;
+    // 수정4: 고정된 자리는 이동 버튼 대신 잠금 표시만 노출 (해제 후에만 이동 가능)
+    if (p.orderLocked) {
+      return (
+        <span className="w-6 h-6 flex items-center justify-center text-amber-500 text-xs" title="순번 고정됨">
+          🔒
+        </span>
+      );
+    }
     const boundary = st === "inProgress" ? (activeScored ? minIdx : minIdx - 1) : -1;
     if (idx <= boundary) return null;
     return (
@@ -298,6 +367,30 @@ export default function InnerwarDetailPage() {
           className="w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-20 text-xs"
         >▼</button>
       </div>
+    );
+  }
+
+  // 수정4: 경기 시작 전에만 노출되는 순번 고정/해제 버튼 — 본인 또는 관리자만 조작 가능.
+  // 고정하면 다른 인원이 그 자리로 스왑해 들어올 수 없고, 순번 이동 시 고정된 자리를 건너뛴다.
+  function renderLockButton(p: typeof approvedParticipants[0]) {
+    if (!p.team) return null;
+    const st = innerwar?.status ?? "draft";
+    if (st !== "draft" && st !== "teamAssigned") return null;
+    const canToggle = isManager || (!!currentUser && p.userId === currentUser._id);
+    if (!canToggle) return null;
+    return (
+      <button
+        onClick={() => handleToggleLock(p._id)}
+        disabled={lockingId === p._id}
+        title={p.orderLocked ? "순번 고정 해제" : "현재 순번 고정"}
+        className={`text-xs px-2 py-1 rounded font-medium whitespace-nowrap disabled:opacity-50 ${
+          p.orderLocked
+            ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
+            : "border border-gray-300 text-gray-500 hover:bg-gray-50"
+        }`}
+      >
+        {lockingId === p._id ? "..." : p.orderLocked ? "🔒 해제" : "고정"}
+      </button>
     );
   }
 
@@ -356,9 +449,15 @@ export default function InnerwarDetailPage() {
                 <li key={p._id} className="flex items-center justify-between gap-1">
                   <span className="text-sm text-gray-700">
                     <span className="text-gray-400 mr-1.5">{idx + 1}.</span>
-                    {displayName(p.user)}
+                    <Link href={`/players/${p.userId}/innerwar?innerwar=${innerwarId}`} className="hover:underline">
+                      {displayName(p.user)}
+                    </Link>
+                    <WinBadge wins={p.user?.leagueWins} />
                   </span>
-                  {renderOrderButtons(p, idx, teamA.length)}
+                  <div className="flex items-center gap-1">
+                    {renderLockButton(p)}
+                    {renderOrderButtons(p, idx, teamA.length)}
+                  </div>
                 </li>
               ))}
             </ul>
@@ -370,9 +469,15 @@ export default function InnerwarDetailPage() {
                 <li key={p._id} className="flex items-center justify-between gap-1">
                   <span className="text-sm text-gray-700">
                     <span className="text-gray-400 mr-1.5">{idx + 1}.</span>
-                    {displayName(p.user)}
+                    <Link href={`/players/${p.userId}/innerwar?innerwar=${innerwarId}`} className="hover:underline">
+                      {displayName(p.user)}
+                    </Link>
+                    <WinBadge wins={p.user?.leagueWins} />
                   </span>
-                  {renderOrderButtons(p, idx, teamB.length)}
+                  <div className="flex items-center gap-1">
+                    {renderLockButton(p)}
+                    {renderOrderButtons(p, idx, teamB.length)}
+                  </div>
                 </li>
               ))}
             </ul>
@@ -418,6 +523,7 @@ export default function InnerwarDetailPage() {
               {currentUser.nickname && currentUser.name
                 ? `${currentUser.nickname}(${currentUser.name})`
                 : currentUser.nickname ?? currentUser.name}
+              <WinBadge wins={currentUser.leagueWins} />
             </span>
           )}
           <UserButton />
@@ -513,7 +619,10 @@ export default function InnerwarDetailPage() {
                               <span className="text-xs text-gray-400 w-5 text-right">{idx + 1}.</span>
                             )}
                             <span className="text-sm font-medium text-gray-800">
-                              {displayName(p.user)}
+                              <Link href={`/players/${p.userId}/innerwar?innerwar=${innerwarId}`} className="hover:underline">
+                                {displayName(p.user)}
+                              </Link>
+                              <WinBadge wins={p.user?.leagueWins} />
                             </span>
                             {p.team && (
                               <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
@@ -524,6 +633,7 @@ export default function InnerwarDetailPage() {
                             )}
                           </div>
                           <div className="flex items-center gap-1">
+                            {p.team && renderLockButton(p)}
                             {p.team && renderOrderButtons(p, idx, sameTeamList.length)}
                             {canManageTeam && (
                               <>
@@ -624,7 +734,12 @@ export default function InnerwarDetailPage() {
                   <div className="flex items-center justify-center gap-6 mb-5">
                     <div className="text-center">
                       <div className="text-xs font-bold text-blue-600 mb-1">A팀</div>
-                      <div className="text-base font-bold text-gray-900">{displayName(activeMatch.playerA)}</div>
+                      <div className="text-base font-bold text-gray-900">
+                        <Link href={`/players/${activeMatch.playerAId}/innerwar?innerwar=${innerwarId}`} className="hover:underline">
+                          {displayName(activeMatch.playerA)}
+                        </Link>
+                        <WinBadge wins={activeMatch.playerA?.leagueWins} />
+                      </div>
                       <div className="text-xs text-gray-400 mt-0.5">
                         {teamA.findIndex((p) => p.userId === activeMatch.playerAId) + 1}번 선수
                       </div>
@@ -632,7 +747,12 @@ export default function InnerwarDetailPage() {
                     <span className="text-2xl font-bold text-gray-300">VS</span>
                     <div className="text-center">
                       <div className="text-xs font-bold text-red-600 mb-1">B팀</div>
-                      <div className="text-base font-bold text-gray-900">{displayName(activeMatch.playerB)}</div>
+                      <div className="text-base font-bold text-gray-900">
+                        <Link href={`/players/${activeMatch.playerBId}/innerwar?innerwar=${innerwarId}`} className="hover:underline">
+                          {displayName(activeMatch.playerB)}
+                        </Link>
+                        <WinBadge wins={activeMatch.playerB?.leagueWins} />
+                      </div>
                       <div className="text-xs text-gray-400 mt-0.5">
                         {teamB.findIndex((p) => p.userId === activeMatch.playerBId) + 1}번 선수
                       </div>
@@ -790,7 +910,11 @@ export default function InnerwarDetailPage() {
                         isPlaying ? "text-blue-700 font-bold" : "text-gray-600"
                       }`}>
                         <span>
-                          {idx + 1}. {displayName(p.user)}
+                          {idx + 1}.{" "}
+                          <Link href={`/players/${p.userId}/innerwar?innerwar=${innerwarId}`} className="hover:underline">
+                            {displayName(p.user)}
+                          </Link>
+                          <WinBadge wins={p.user?.leagueWins} />
                           {isPlaying && <span className="ml-1 text-xs">▶</span>}
                         </span>
                         <div className="flex items-center gap-1">
@@ -822,7 +946,11 @@ export default function InnerwarDetailPage() {
                         isPlaying ? "text-red-700 font-bold" : "text-gray-600"
                       }`}>
                         <span>
-                          {idx + 1}. {displayName(p.user)}
+                          {idx + 1}.{" "}
+                          <Link href={`/players/${p.userId}/innerwar?innerwar=${innerwarId}`} className="hover:underline">
+                            {displayName(p.user)}
+                          </Link>
+                          <WinBadge wins={p.user?.leagueWins} />
                           {isPlaying && <span className="ml-1 text-xs">▶</span>}
                         </span>
                         <div className="flex items-center gap-1">
@@ -891,11 +1019,13 @@ export default function InnerwarDetailPage() {
                         <span className="text-xs text-gray-400 w-5 text-right shrink-0">{idx + 1}</span>
                         <span className={`flex-1 text-sm font-semibold text-right ${loserColor}`}>
                           {displayName(loser.user)}
+                          <WinBadge wins={loser.user?.leagueWins} />
                           <span className="ml-1 text-xs font-normal opacity-60">({winnerTeam === "A" ? "B" : "A"}팀)</span>
                         </span>
                         <span className="text-gray-400 text-sm shrink-0">→</span>
                         <span className={`flex-1 text-sm font-semibold text-left ${winnerColor}`}>
                           {displayName(winner.user)}
+                          <WinBadge wins={winner.user?.leagueWins} />
                           <span className="ml-1 text-xs font-normal opacity-60">({winnerTeam}팀)</span>
                         </span>
                       </li>
@@ -925,6 +1055,7 @@ export default function InnerwarDetailPage() {
                     <th className="px-4 py-3 text-center w-20">스코어</th>
                     <th className="px-4 py-3 text-left">B팀</th>
                     <th className="px-4 py-3 text-center w-20">결과</th>
+                    {canEditLastMatch && <th className="px-4 py-3 text-center w-20">관리</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -932,17 +1063,40 @@ export default function InnerwarDetailPage() {
                     const aWon = m.winnerId === m.playerAId;
                     const bWon = m.winnerId === m.playerBId;
                     const isDraw = !m.winnerId;
+                    const isLastRow = idx === completedMatches.length - 1;
                     return (
                       <tr key={m._id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 text-center text-gray-400">{idx + 1}</td>
                         <td className={`px-4 py-3 text-right font-medium ${aWon ? "text-blue-700" : isDraw ? "text-gray-500" : "text-gray-400"}`}>
                           {displayName(m.playerA)}
+                          <WinBadge wins={m.playerA?.leagueWins} />
                         </td>
                         <td className="px-4 py-3 text-center font-bold text-gray-900">
-                          {m.scoreA} - {m.scoreB}
+                          {isLastRow && editingPrev ? (
+                            <div className="flex items-center justify-center gap-1">
+                              <input
+                                type="number"
+                                min={0}
+                                value={prevScoreA}
+                                onChange={(e) => setPrevScoreA(e.target.value)}
+                                className="w-10 rounded border border-gray-300 px-1 py-0.5 text-sm text-center outline-none focus:border-blue-500"
+                              />
+                              <span className="text-gray-500 font-bold text-sm">:</span>
+                              <input
+                                type="number"
+                                min={0}
+                                value={prevScoreB}
+                                onChange={(e) => setPrevScoreB(e.target.value)}
+                                className="w-10 rounded border border-gray-300 px-1 py-0.5 text-sm text-center outline-none focus:border-blue-500"
+                              />
+                            </div>
+                          ) : (
+                            <>{m.scoreA} - {m.scoreB}</>
+                          )}
                         </td>
                         <td className={`px-4 py-3 text-left font-medium ${bWon ? "text-red-700" : isDraw ? "text-gray-500" : "text-gray-400"}`}>
                           {displayName(m.playerB)}
+                          <WinBadge wins={m.playerB?.leagueWins} />
                         </td>
                         <td className="px-4 py-3 text-center text-xs font-bold">
                           {aWon ? (
@@ -953,11 +1107,44 @@ export default function InnerwarDetailPage() {
                             <span className="text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">동반탈락</span>
                           )}
                         </td>
+                        {canEditLastMatch && (
+                          <td className="px-4 py-3 text-center">
+                            {isLastRow && (
+                              editingPrev ? (
+                                <div className="flex items-center justify-center gap-1">
+                                  <button
+                                    onClick={() => { setEditingPrev(false); setPrevError(null); }}
+                                    className="text-xs px-2 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 whitespace-nowrap"
+                                  >
+                                    취소
+                                  </button>
+                                  <button
+                                    onClick={handleSavePrevMatch}
+                                    disabled={prevSaving}
+                                    className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
+                                  >
+                                    {prevSaving ? "..." : "저장"}
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={startEditPrev}
+                                  className="text-xs px-2 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 whitespace-nowrap"
+                                >
+                                  수정
+                                </button>
+                              )
+                            )}
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
+              {editingPrev && prevError && (
+                <p className="text-xs text-red-500 text-center px-4 py-2">{prevError}</p>
+              )}
             </div>
           </div>
         )}
@@ -1031,7 +1218,10 @@ export default function InnerwarDetailPage() {
                     <tr key={p._id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-center text-gray-400">{p.assignRank}</td>
                       <td className="px-4 py-3 font-medium text-gray-900">
-                        {displayName(p.user)}
+                        <Link href={`/players/${p.userId}/innerwar?innerwar=${innerwarId}`} className="hover:underline">
+                          {displayName(p.user)}
+                        </Link>
+                        <WinBadge wins={p.user?.leagueWins} />
                         {/* 리그·내전 경기를 한 번도 하지 않아 최하위로 배치된 참가자 표시 */}
                         {p.assignHasHistory === false && (
                           <span className="ml-1.5 text-[10px] font-normal text-gray-400">(전적없음)</span>

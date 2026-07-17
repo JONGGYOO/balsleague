@@ -111,6 +111,127 @@ export const getDetail = query({
   },
 });
 
+// 선수 통계(내전) — 전체 내전 경기의 승/무/패/득실, 뷰어와의 상대 전적, 최근 경기 목록.
+// innerwarId를 넘기면 그 내전으로 범위를 좁힌 "현재 내전 통계"도 함께 반환한다(scores.getPlayerStats의
+// leagueId 패턴과 동일). 삭제된(테스트용 등) 내전의 경기는 집계에서 제외.
+// app/players/[userId]/innerwar 페이지에서 사용 — 리그 통계 페이지(app/players/[userId])와는 분리되어 있음.
+export const getInnerwarPlayerStats = query({
+  args: { userId: v.id("users"), innerwarId: v.optional(v.id("innerwars")) },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+
+    const player = await ctx.db.get(args.userId);
+    if (!player) return null;
+
+    const viewer = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .unique();
+    const isViewingSelf = viewer?._id === args.userId;
+
+    const allInnerwars = await ctx.db.query("innerwars").take(2000);
+    const validInnerwarIds = new Set(
+      allInnerwars.filter((w) => !w.deletedAt).map((w) => w._id)
+    );
+
+    const allMatches = await ctx.db.query("innerwarMatches").take(5000);
+    const myMatches = allMatches.filter(
+      (m) =>
+        m.status === "done" &&
+        validInnerwarIds.has(m.innerwarId) &&
+        (m.playerAId === args.userId || m.playerBId === args.userId)
+    );
+    myMatches.sort((a, b) => b._creationTime - a._creationTime);
+
+    const opponentIds = new Set<Id<"users">>();
+    for (const m of myMatches) {
+      opponentIds.add(m.playerAId === args.userId ? m.playerBId : m.playerAId);
+    }
+    const userMap = new Map<string, Doc<"users">>();
+    for (const oppId of opponentIds) {
+      const u = await ctx.db.get(oppId);
+      if (u) userMap.set(oppId, u);
+    }
+
+    const innerwarMap = new Map<string, Doc<"innerwars">>();
+    for (const innerwarId of new Set(myMatches.map((m) => m.innerwarId))) {
+      const w = await ctx.db.get(innerwarId);
+      if (w) innerwarMap.set(innerwarId, w);
+    }
+
+    type Stat = { games: number; wins: number; draws: number; losses: number; goalsFor: number; goalsAgainst: number };
+    function zero(): Stat {
+      return { games: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 };
+    }
+    function acc(s: Stat, myG: number, oppG: number) {
+      s.games++;
+      s.goalsFor += myG;
+      s.goalsAgainst += oppG;
+      if (myG > oppG) s.wins++;
+      else if (myG < oppG) s.losses++;
+      else s.draws++;
+    }
+
+    const overall = zero();
+    const vsViewer = zero();
+    const currentInnerwar = zero();
+    const vsViewerCurrentInnerwar = zero();
+
+    const enrichedMatches = myMatches.map((m) => {
+      const isA = m.playerAId === args.userId;
+      const myScore = isA ? m.scoreA ?? 0 : m.scoreB ?? 0;
+      const oppScore = isA ? m.scoreB ?? 0 : m.scoreA ?? 0;
+      const oppId: Id<"users"> = isA ? m.playerBId : m.playerAId;
+      const opponent = userMap.get(oppId) ?? null;
+      const result: "win" | "draw" | "loss" =
+        myScore > oppScore ? "win" : myScore < oppScore ? "loss" : "draw";
+      const isCurrentInnerwar = args.innerwarId !== undefined && m.innerwarId === args.innerwarId;
+
+      acc(overall, myScore, oppScore);
+      if (viewer && !isViewingSelf && oppId === viewer._id) acc(vsViewer, myScore, oppScore);
+      if (isCurrentInnerwar) {
+        acc(currentInnerwar, myScore, oppScore);
+        if (viewer && !isViewingSelf && oppId === viewer._id) acc(vsViewerCurrentInnerwar, myScore, oppScore);
+      }
+
+      return {
+        ...m,
+        myScore,
+        oppScore,
+        oppId,
+        opponent,
+        result,
+        innerwar: innerwarMap.get(m.innerwarId) ?? null,
+      };
+    });
+
+    return {
+      player,
+      currentInnerwarStats:
+        args.innerwarId !== undefined
+          ? { ...currentInnerwar, goalDiff: currentInnerwar.goalsFor - currentInnerwar.goalsAgainst }
+          : null,
+      overall: { ...overall, goalDiff: overall.goalsFor - overall.goalsAgainst },
+      vsViewer:
+        viewer && !isViewingSelf
+          ? {
+              currentInnerwar:
+                args.innerwarId !== undefined
+                  ? {
+                      ...vsViewerCurrentInnerwar,
+                      goalDiff: vsViewerCurrentInnerwar.goalsFor - vsViewerCurrentInnerwar.goalsAgainst,
+                    }
+                  : null,
+              allInnerwars: { ...vsViewer, goalDiff: vsViewer.goalsFor - vsViewer.goalsAgainst },
+              viewer,
+            }
+          : null,
+      matches: enrichedMatches,
+    };
+  },
+});
+
 // 4-3: teamAssignPermission 필드 추가 / 6-1: betItem 필드 추가
 export const create = mutation({
   args: {
@@ -270,6 +391,7 @@ export const assignTeamsRandom = mutation({
       await ctx.db.patch(shuffled[i]._id, {
         team,
         teamOrder,
+        orderLocked: undefined,
         assignScore: undefined,
         assignLeagueRate: undefined,
         assignInnerwarRate: undefined,
@@ -306,6 +428,10 @@ export const assignTeamsRandom = mutation({
 const SCORE_WEIGHT_LEAGUE = 0.8;
 const SCORE_WEIGHT_INNERWAR = 0.2;
 const SCORE_SMOOTHING_GAMES = 4; // 스무딩 상수(K) — 클수록 표본 적은 선수를 0.5(중간값)에 가깝게 당김
+// 합산 경기 수가 이 값 미만이면 스무딩으로도 신뢰할 수 없는 표본으로 보고 "전적없음"과
+// 동일하게 항상 최하위로 배치한다. (예: 1경기 0승이 스무딩으로 40%가 되어, 경기를 훨씬
+// 많이 뛰고도 실력이 검증된 약체보다 순위가 앞서는 역전 현상 방지 — 버그 리포트로 확인됨)
+const MIN_TOTAL_GAMES_FOR_HISTORY = 3;
 
 function smoothedWinRate(wins: number, games: number, k: number): number {
   return (wins + k * 0.5) / (games + k);
@@ -384,7 +510,8 @@ export const assignTeamsByScore = mutation({
         score,
         leagueRate,
         innerwarRate,
-        hasHistory: leagueGames.length > 0 || innerwarGames.length > 0,
+        hasHistory:
+          leagueGames.length + innerwarGames.length >= MIN_TOTAL_GAMES_FOR_HISTORY,
         leagueGamesCount: leagueGames.length,
         innerwarGamesCount: innerwarGames.length,
       });
@@ -423,6 +550,7 @@ export const assignTeamsByScore = mutation({
       await ctx.db.patch(p._id, {
         team,
         teamOrder,
+        orderLocked: undefined,
         assignScore: detail.score,
         assignLeagueRate: detail.leagueRate,
         assignInnerwarRate: detail.innerwarRate,
@@ -474,6 +602,7 @@ export const setPlayerTeam = mutation({
       const {
         team: _t,
         teamOrder: _o,
+        orderLocked: _ol,
         assignScore: _as,
         assignLeagueRate: _alr,
         assignInnerwarRate: _air,
@@ -501,6 +630,7 @@ export const setPlayerTeam = mutation({
     await ctx.db.patch(args.participantId, {
       team: args.team,
       teamOrder: maxOrder + 1,
+      orderLocked: undefined,
       assignScore: undefined,
       assignLeagueRate: undefined,
       assignInnerwarRate: undefined,
@@ -517,6 +647,9 @@ export const setPlayerTeam = mutation({
 //      현재 경기 중인(활성 슬롯) 선수는 점수 저장 전까지만 변경 가능하며,
 //      이 경우 진행 중인 매치의 선수 참조도 함께 갱신한다. 이미 경기를 마쳤거나
 //      점수가 저장된 선수는 순번 변경 불가.
+// 수정4: 고정(orderLocked)된 자리는 스왑 대상에서 제외 — 이동 시 고정된 자리를 건너뛰어
+//        다음 이동 가능한 자리와 스왑한다(연속으로 여러 자리가 고정돼 있어도 그만큼 건너뜀).
+//        본인 자리가 고정된 경우에는 먼저 해제해야 이동할 수 있다.
 export const reorderTeamMember = mutation({
   args: {
     participantId: v.id("innerwarParticipants"),
@@ -528,6 +661,9 @@ export const reorderTeamMember = mutation({
 
     const participant = await ctx.db.get(args.participantId);
     if (!participant) throw new Error("참가자를 찾을 수 없습니다.");
+    if (participant.orderLocked) {
+      throw new Error("고정된 순번은 해제 후 이동할 수 있습니다.");
+    }
 
     const innerwar = await ctx.db.get(participant.innerwarId);
     if (innerwar?.status === "done") {
@@ -549,7 +685,16 @@ export const reorderTeamMember = mutation({
     const currentIdx = teamMembers.findIndex((p) => p._id === args.participantId);
     if (currentIdx === -1) return;
 
-    const targetIdx = args.direction === "up" ? currentIdx - 1 : currentIdx + 1;
+    // 고정된 자리를 건너뛰어 다음 이동 가능한 자리를 찾는다
+    const step = args.direction === "up" ? -1 : 1;
+    let targetIdx = currentIdx + step;
+    while (
+      targetIdx >= 0 &&
+      targetIdx < teamMembers.length &&
+      teamMembers[targetIdx].orderLocked
+    ) {
+      targetIdx += step;
+    }
     if (targetIdx < 0 || targetIdx >= teamMembers.length) return;
 
     let activeMatchToUpdate: Doc<"innerwarMatches"> | null = null;
@@ -596,6 +741,40 @@ export const reorderTeamMember = mutation({
           : { playerBId: newActiveParticipant.userId }
       );
     }
+  },
+});
+
+// 수정4: 경기 시작 전 순번 고정/해제 — 본인만 자신의 자리를 고정/해제할 수 있고
+// (관리자는 대신 처리 가능), 경기 시작 후에는 변경할 수 없다.
+export const toggleOrderLock = mutation({
+  args: { participantId: v.id("innerwarParticipants") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("인증되지 않은 사용자입니다.");
+
+    const participant = await ctx.db.get(args.participantId);
+    if (!participant) throw new Error("참가자를 찾을 수 없습니다.");
+    if (!participant.team) throw new Error("팀이 배정되지 않았습니다.");
+
+    const innerwar = await ctx.db.get(participant.innerwarId);
+    if (!innerwar) throw new Error("내전을 찾을 수 없습니다.");
+    if (innerwar.status === "inProgress" || innerwar.status === "done") {
+      throw new Error("경기 시작 후에는 순번 고정을 변경할 수 없습니다.");
+    }
+
+    const role = await getEffectiveRole(ctx);
+    const isManager = role === "superAdmin" || role === "admin";
+    if (!isManager) {
+      const me = await ctx.db
+        .query("users")
+        .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+        .unique();
+      if (!me || participant.userId !== me._id) {
+        throw new Error("본인만 순번을 고정/해제할 수 있습니다.");
+      }
+    }
+
+    await ctx.db.patch(args.participantId, { orderLocked: !participant.orderLocked });
   },
 });
 
@@ -815,6 +994,175 @@ export const confirmMatchResult = mutation({
   },
 });
 
+// 점수 저장 → 다음 경기 진행 직후, 방금 확정된(바로 이전) 경기의 점수를 다시 고칠 수 있도록 함.
+// 다음 경기가 이미 시작되어 점수가 입력됐다면(그 이후 진행에 영향이 생기므로) 수정 불가.
+// 토너먼트가 완전히 끝난 경우(마지막 경기)에도, 그 마지막 경기라면 수정 가능 — 우승팀이
+// 뒤바뀔 수 있으므로 이후 진행 상태(currentIndexA/B, winnerTeam)를 이 경기 기준으로 재계산한다.
+export const editLastMatch = mutation({
+  args: {
+    matchId: v.id("innerwarMatches"),
+    scoreA: v.number(),
+    scoreB: v.number(),
+  },
+  handler: async (ctx, args) => {
+    if (args.scoreA < 0 || args.scoreB < 0) {
+      throw new Error("점수는 0 이상이어야 합니다.");
+    }
+
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("인증되지 않은 사용자입니다.");
+
+    const match = await ctx.db.get(args.matchId);
+    if (!match) throw new Error("경기를 찾을 수 없습니다.");
+    if (match.status !== "done") throw new Error("확정된 경기만 수정할 수 있습니다.");
+
+    const role = await getEffectiveRole(ctx);
+    const isManager = role === "superAdmin" || role === "admin";
+    if (!isManager) {
+      const me = await ctx.db
+        .query("users")
+        .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+        .unique();
+      if (!me) throw new Error("사용자를 찾을 수 없습니다.");
+      const isPlayer = match.playerAId === me._id || match.playerBId === me._id;
+      if (!isPlayer) throw new Error("해당 경기 참가자 또는 관리자만 수정할 수 있습니다.");
+    }
+
+    const allMatches = await ctx.db
+      .query("innerwarMatches")
+      .withIndex("by_innerwar", (q) => q.eq("innerwarId", match.innerwarId))
+      .take(500);
+    const nextMatch = allMatches.find((m) => m.matchIndex === match.matchIndex + 1) ?? null;
+    if (nextMatch && nextMatch.status !== "pending") {
+      throw new Error("다음 경기가 이미 진행되어 이전 경기를 수정할 수 없습니다.");
+    }
+
+    const allParticipants = await ctx.db
+      .query("innerwarParticipants")
+      .withIndex("by_innerwar", (q) => q.eq("innerwarId", match.innerwarId))
+      .take(200);
+    const teamA = allParticipants
+      .filter((p) => p.team === "A")
+      .sort((a, b) => (a.teamOrder ?? 0) - (b.teamOrder ?? 0));
+    const teamB = allParticipants
+      .filter((p) => p.team === "B")
+      .sort((a, b) => (a.teamOrder ?? 0) - (b.teamOrder ?? 0));
+
+    const beforeIndexA = teamA.findIndex((p) => p.userId === match.playerAId);
+    const beforeIndexB = teamB.findIndex((p) => p.userId === match.playerBId);
+    if (beforeIndexA === -1 || beforeIndexB === -1) {
+      throw new Error("경기 참가자 정보를 찾을 수 없습니다.");
+    }
+
+    if (nextMatch) {
+      await ctx.db.delete(nextMatch._id);
+    }
+
+    const isDraw = args.scoreA === args.scoreB;
+
+    if (isDraw) {
+      const isLastA = beforeIndexA === teamA.length - 1;
+      const isLastB = beforeIndexB === teamB.length - 1;
+      if (isLastA && isLastB) {
+        throw new Error("마지막 경기는 동점이 허용되지 않습니다. 연장 또는 승부차기로 결정해주세요.");
+      }
+
+      await ctx.db.replace(args.matchId, {
+        innerwarId: match.innerwarId,
+        playerAId: match.playerAId,
+        playerBId: match.playerBId,
+        matchIndex: match.matchIndex,
+        scoreA: args.scoreA,
+        scoreB: args.scoreB,
+        status: "done",
+      });
+
+      const nextA = beforeIndexA + 1;
+      const nextB = beforeIndexB + 1;
+
+      if (nextA >= teamA.length) {
+        await ctx.db.patch(match.innerwarId, {
+          status: "done",
+          winnerTeam: "B",
+          currentIndexA: nextA,
+          currentIndexB: nextB,
+        });
+        return;
+      }
+      if (nextB >= teamB.length) {
+        await ctx.db.patch(match.innerwarId, {
+          status: "done",
+          winnerTeam: "A",
+          currentIndexA: nextA,
+          currentIndexB: nextB,
+        });
+        return;
+      }
+
+      await ctx.db.insert("innerwarMatches", {
+        innerwarId: match.innerwarId,
+        playerAId: teamA[nextA].userId,
+        playerBId: teamB[nextB].userId,
+        matchIndex: match.matchIndex + 1,
+        status: "pending",
+      });
+      await ctx.db.patch(match.innerwarId, {
+        status: "inProgress",
+        winnerTeam: undefined,
+        currentIndexA: nextA,
+        currentIndexB: nextB,
+      });
+      return;
+    }
+
+    // 일반 승패 처리
+    const isAWinner = args.scoreA > args.scoreB;
+    const winnerId = isAWinner ? match.playerAId : match.playerBId;
+    await ctx.db.patch(args.matchId, {
+      scoreA: args.scoreA,
+      scoreB: args.scoreB,
+      winnerId,
+      status: "done",
+    });
+
+    const nextIndexA = beforeIndexA + (isAWinner ? 0 : 1);
+    const nextIndexB = beforeIndexB + (isAWinner ? 1 : 0);
+
+    if (nextIndexA >= teamA.length) {
+      await ctx.db.patch(match.innerwarId, {
+        status: "done",
+        winnerTeam: "B",
+        currentIndexA: nextIndexA,
+        currentIndexB: nextIndexB,
+      });
+      return;
+    }
+    if (nextIndexB >= teamB.length) {
+      await ctx.db.patch(match.innerwarId, {
+        status: "done",
+        winnerTeam: "A",
+        currentIndexA: nextIndexA,
+        currentIndexB: nextIndexB,
+      });
+      return;
+    }
+
+    await ctx.db.insert("innerwarMatches", {
+      innerwarId: match.innerwarId,
+      playerAId: teamA[nextIndexA].userId,
+      playerBId: teamB[nextIndexB].userId,
+      matchIndex: match.matchIndex + 1,
+      status: "pending",
+    });
+    await ctx.db.patch(match.innerwarId, {
+      status: "inProgress",
+      winnerTeam: undefined,
+      currentIndexA: nextIndexA,
+      currentIndexB: nextIndexB,
+    });
+  },
+});
+
 // 4-2 / 4-3 / 5-1: 초기화 권한 제어
 export const resetTeams = mutation({
   args: { innerwarId: v.id("innerwars") },
@@ -849,6 +1197,7 @@ export const resetTeams = mutation({
       const {
         team: _t,
         teamOrder: _o,
+        orderLocked: _ol,
         assignScore: _as,
         assignLeagueRate: _alr,
         assignInnerwarRate: _air,
