@@ -1018,13 +1018,17 @@ export default function InnerwarDetailPage() {
                       <li key={loser._id} className="px-5 py-3 flex items-center gap-3">
                         <span className="text-xs text-gray-400 w-5 text-right shrink-0">{idx + 1}</span>
                         <span className={`flex-1 text-sm font-semibold text-right ${loserColor}`}>
-                          {displayName(loser.user)}
+                          <Link href={`/players/${loser.userId}/innerwar?innerwar=${innerwarId}`} className="hover:underline">
+                            {displayName(loser.user)}
+                          </Link>
                           <WinBadge wins={loser.user?.leagueWins} />
                           <span className="ml-1 text-xs font-normal opacity-60">({winnerTeam === "A" ? "B" : "A"}팀)</span>
                         </span>
                         <span className="text-gray-400 text-sm shrink-0">→</span>
                         <span className={`flex-1 text-sm font-semibold text-left ${winnerColor}`}>
-                          {displayName(winner.user)}
+                          <Link href={`/players/${winner.userId}/innerwar?innerwar=${innerwarId}`} className="hover:underline">
+                            {displayName(winner.user)}
+                          </Link>
                           <WinBadge wins={winner.user?.leagueWins} />
                           <span className="ml-1 text-xs font-normal opacity-60">({winnerTeam}팀)</span>
                         </span>
@@ -1068,7 +1072,9 @@ export default function InnerwarDetailPage() {
                       <tr key={m._id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 text-center text-gray-400">{idx + 1}</td>
                         <td className={`px-4 py-3 text-right font-medium ${aWon ? "text-blue-700" : isDraw ? "text-gray-500" : "text-gray-400"}`}>
-                          {displayName(m.playerA)}
+                          <Link href={`/players/${m.playerAId}/innerwar?innerwar=${innerwarId}`} className="hover:underline">
+                            {displayName(m.playerA)}
+                          </Link>
                           <WinBadge wins={m.playerA?.leagueWins} />
                         </td>
                         <td className="px-4 py-3 text-center font-bold text-gray-900">
@@ -1095,7 +1101,9 @@ export default function InnerwarDetailPage() {
                           )}
                         </td>
                         <td className={`px-4 py-3 text-left font-medium ${bWon ? "text-red-700" : isDraw ? "text-gray-500" : "text-gray-400"}`}>
-                          {displayName(m.playerB)}
+                          <Link href={`/players/${m.playerBId}/innerwar?innerwar=${innerwarId}`} className="hover:underline">
+                            {displayName(m.playerB)}
+                          </Link>
                           <WinBadge wins={m.playerB?.leagueWins} />
                         </td>
                         <td className="px-4 py-3 text-center text-xs font-bold">
@@ -1171,7 +1179,11 @@ export default function InnerwarDetailPage() {
                 <tbody className="divide-y divide-gray-100">
                   {stats.map(([userId, s]) => (
                     <tr key={userId} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium text-gray-900">{s.name}</td>
+                      <td className="px-4 py-3 font-medium text-gray-900">
+                        <Link href={`/players/${userId}/innerwar?innerwar=${innerwarId}`} className="hover:underline">
+                          {s.name}
+                        </Link>
+                      </td>
                       <td className="px-4 py-3 text-center">
                         <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
                           s.team === "A" ? "bg-blue-100 text-blue-700" : "bg-red-100 text-red-700"
