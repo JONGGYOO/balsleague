@@ -7,6 +7,7 @@ import { UserButton, useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useMemo, useEffect } from "react";
+import { WinBadge } from "@/app/components/WinBadge";
 
 const MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
@@ -148,7 +149,6 @@ export default function LeaguesPage() {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold text-gray-900">발스리그</h1>
           <nav className="flex items-center gap-1">
             <span className="text-sm font-semibold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
               리그
@@ -158,6 +158,12 @@ export default function LeaguesPage() {
               className="text-sm font-medium text-gray-500 hover:text-gray-800 px-3 py-1 rounded-full hover:bg-gray-100"
             >
               내전
+            </Link>
+            <Link
+              href="/awards"
+              className="text-sm font-medium text-gray-500 hover:text-gray-800 px-3 py-1 rounded-full hover:bg-gray-100"
+            >
+              Award
             </Link>
           </nav>
         </div>
@@ -178,6 +184,7 @@ export default function LeaguesPage() {
               {currentUser.nickname && currentUser.name
                 ? `${currentUser.nickname}(${currentUser.name})`
                 : currentUser.nickname ?? currentUser.name}
+              <WinBadge wins={currentUser.leagueWins} />
             </span>
           )}
           <UserButton />
