@@ -7,6 +7,7 @@ import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { WinBadge } from "@/app/components/WinBadge";
 
 function displayName(user: { name?: string; nickname?: string } | null | undefined): string {
   if (!user) return "알 수 없음";
@@ -138,6 +139,7 @@ export default function MatchesPage() {
               {currentUser.nickname && currentUser.name
                 ? `${currentUser.nickname}(${currentUser.name})`
                 : currentUser.nickname ?? currentUser.name}
+              <WinBadge wins={currentUser.leagueWins} />
             </span>
           )}
           <UserButton />
@@ -195,6 +197,7 @@ export default function MatchesPage() {
                         }`}
                       >
                         {displayName(match.homeUser)}
+                        <WinBadge wins={match.homeUser?.leagueWins} />
                       </Link>
 
                       {/* 스코어 or 편집 인풋 */}
@@ -251,6 +254,7 @@ export default function MatchesPage() {
                         }`}
                       >
                         {displayName(match.awayUser)}
+                        <WinBadge wins={match.awayUser?.leagueWins} />
                       </Link>
 
                       {/* 수정/취소/저장 버튼 — 한 줄 */}

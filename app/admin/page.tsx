@@ -7,6 +7,7 @@ import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { WinBadge } from "@/app/components/WinBadge";
 
 function displayName(user: { name?: string; nickname?: string; email?: string } | null | undefined): string {
   if (!user) return "알 수 없음";
@@ -58,6 +59,7 @@ export default function AdminPage() {
               {currentUser.nickname && currentUser.name
                 ? `${currentUser.nickname}(${currentUser.name})`
                 : currentUser.nickname ?? currentUser.name}
+              <WinBadge wins={currentUser.leagueWins} />
             </span>
           )}
           <UserButton />
@@ -164,6 +166,7 @@ function PendingParticipants() {
             <div>
               <p className="font-semibold text-gray-900">
                 {displayName(item.user)}
+                <WinBadge wins={item.user?.leagueWins} />
                 {item.user?.organization && (
                   <span className="ml-2 text-xs text-gray-400 font-normal">
                     {item.user.organization}
@@ -325,6 +328,7 @@ function UserManagement({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-semibold text-gray-900">
                     {displayName(user)}
+                    <WinBadge wins={user.leagueWins} />
                     {isSelf && <span className="ml-1 text-xs text-blue-500">(나)</span>}
                   </p>
                   {isAdmin ? (

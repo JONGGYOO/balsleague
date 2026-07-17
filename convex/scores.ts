@@ -1,7 +1,107 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { Id, Doc } from "./_generated/dataModel";
+import { QueryCtx, MutationCtx } from "./_generated/server";
 import { getOrCreateUser, getEffectiveRole } from "./utils";
+
+// 승점 규칙: 승 3점 · 무 1점 · 패 0점
+const POINTS_WIN = 3;
+const POINTS_DRAW = 1;
+
+// 리그 종료(endLeague)에서도 재사용하기 위해 순위 계산을 별도 함수로 분리
+export async function computeStandings(
+  ctx: Pick<QueryCtx | MutationCtx, "db">,
+  leagueId: Id<"leagues">
+) {
+  const participants = await ctx.db
+    .query("leagueParticipants")
+    .withIndex("by_league", (q) => q.eq("leagueId", leagueId))
+    .take(200);
+
+  const allScores = await ctx.db
+    .query("scores")
+    .withIndex("by_league", (q) => q.eq("leagueId", leagueId))
+    .take(500);
+
+  type StatsEntry = {
+    userId: Id<"users">;
+    wins: number;
+    draws: number;
+    losses: number;
+    goalsFor: number;
+    goalsAgainst: number;
+    games: number;
+  };
+
+  const statsMap = new Map<string, StatsEntry>();
+  for (const p of participants) {
+    statsMap.set(p.userId, {
+      userId: p.userId,
+      wins: 0,
+      draws: 0,
+      losses: 0,
+      goalsFor: 0,
+      goalsAgainst: 0,
+      games: 0,
+    });
+  }
+
+  for (const score of allScores) {
+    const home = statsMap.get(score.homeUserId);
+    const away = statsMap.get(score.awayUserId);
+
+    if (home) {
+      home.games++;
+      home.goalsFor += score.homeScore;
+      home.goalsAgainst += score.awayScore;
+      if (score.homeScore > score.awayScore) home.wins++;
+      else if (score.homeScore === score.awayScore) home.draws++;
+      else home.losses++;
+    }
+
+    if (away) {
+      away.games++;
+      away.goalsFor += score.awayScore;
+      away.goalsAgainst += score.homeScore;
+      if (score.awayScore > score.homeScore) away.wins++;
+      else if (score.awayScore === score.homeScore) away.draws++;
+      else away.losses++;
+    }
+  }
+
+  const result = await Promise.all(
+    Array.from(statsMap.values()).map(async (entry) => {
+      const user = await ctx.db.get(entry.userId);
+      const goalDiff = entry.goalsFor - entry.goalsAgainst;
+      const points = entry.wins * POINTS_WIN + entry.draws * POINTS_DRAW;
+      return { ...entry, user, goalDiff, points };
+    })
+  );
+
+  // 승점 → 득실 → 다득점 → 승수 순으로 정렬
+  result.sort((a, b) => {
+    if (b.points !== a.points) return b.points - a.points;
+    if (b.goalDiff !== a.goalDiff) return b.goalDiff - a.goalDiff;
+    if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
+    return b.wins - a.wins;
+  });
+
+  return result;
+}
+
+// 종료된 리그는 일반 사용자의 스코어 입력/수정/삭제를 막고, 관리자는 계속 허용
+async function assertScoreWritable(
+  ctx: Pick<MutationCtx, "db" | "auth">,
+  leagueId: Id<"leagues">
+) {
+  const league = await ctx.db.get(leagueId);
+  if (league?.status === "ended") {
+    const role = await getEffectiveRole(ctx);
+    if (role !== "superAdmin" && role !== "admin") {
+      throw new Error("종료된 리그입니다. 관리자만 기록을 수정할 수 있습니다.");
+    }
+  }
+}
 
 export const add = mutation({
   args: {
@@ -13,6 +113,7 @@ export const add = mutation({
   handler: async (ctx, args) => {
     const me = await getOrCreateUser(ctx);
     if (me._id === args.opponentUserId) throw new Error("자신과의 경기는 입력할 수 없습니다.");
+    await assertScoreWritable(ctx, args.leagueId);
 
     const myParticipation = await ctx.db
       .query("leagueParticipants")
@@ -73,80 +174,7 @@ export const getStandings = query({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
 
-    const participants = await ctx.db
-      .query("leagueParticipants")
-      .withIndex("by_league", (q) => q.eq("leagueId", args.leagueId))
-      .take(200);
-
-    const allScores = await ctx.db
-      .query("scores")
-      .withIndex("by_league", (q) => q.eq("leagueId", args.leagueId))
-      .take(500);
-
-    type StatsEntry = {
-      userId: Id<"users">;
-      wins: number;
-      draws: number;
-      losses: number;
-      goalsFor: number;
-      goalsAgainst: number;
-      games: number;
-    };
-
-    const statsMap = new Map<string, StatsEntry>();
-    for (const p of participants) {
-      statsMap.set(p.userId, {
-        userId: p.userId,
-        wins: 0,
-        draws: 0,
-        losses: 0,
-        goalsFor: 0,
-        goalsAgainst: 0,
-        games: 0,
-      });
-    }
-
-    for (const score of allScores) {
-      const home = statsMap.get(score.homeUserId);
-      const away = statsMap.get(score.awayUserId);
-
-      if (home) {
-        home.games++;
-        home.goalsFor += score.homeScore;
-        home.goalsAgainst += score.awayScore;
-        if (score.homeScore > score.awayScore) home.wins++;
-        else if (score.homeScore === score.awayScore) home.draws++;
-        else home.losses++;
-      }
-
-      if (away) {
-        away.games++;
-        away.goalsFor += score.awayScore;
-        away.goalsAgainst += score.homeScore;
-        if (score.awayScore > score.homeScore) away.wins++;
-        else if (score.awayScore === score.homeScore) away.draws++;
-        else away.losses++;
-      }
-    }
-
-    const result = await Promise.all(
-      Array.from(statsMap.values()).map(async (entry) => {
-        const user = await ctx.db.get(entry.userId);
-        const goalDiff = entry.goalsFor - entry.goalsAgainst;
-        return { ...entry, user, goalDiff };
-      })
-    );
-
-    // 승 → 무 → 패(적을수록) → 득실 → 경기수 순으로 정렬
-    result.sort((a, b) => {
-      if (b.wins !== a.wins) return b.wins - a.wins;
-      if (b.draws !== a.draws) return b.draws - a.draws;
-      if (a.losses !== b.losses) return a.losses - b.losses;
-      if (b.goalDiff !== a.goalDiff) return b.goalDiff - a.goalDiff;
-      return b.games - a.games;
-    });
-
-    return result;
+    return await computeStandings(ctx, args.leagueId);
   },
 });
 
@@ -172,6 +200,7 @@ export const updateScore = mutation({
 
     const score = await ctx.db.get(args.scoreId);
     if (!score) throw new Error("경기 기록을 찾을 수 없습니다.");
+    await assertScoreWritable(ctx, score.leagueId);
 
     const effectiveRole = await getEffectiveRole(ctx);
     // 대전한 두 선수(홈/어웨이) 모두 수정 가능
@@ -205,6 +234,7 @@ export const remove = mutation({
 
     const score = await ctx.db.get(args.scoreId);
     if (!score) throw new Error("경기 기록을 찾을 수 없습니다.");
+    await assertScoreWritable(ctx, score.leagueId);
 
     const effectiveRole = await getEffectiveRole(ctx);
     // 대전한 두 선수(홈/어웨이) 모두 삭제 가능

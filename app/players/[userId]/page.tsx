@@ -7,6 +7,7 @@ import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, Suspense } from "react";
+import { WinBadge } from "@/app/components/WinBadge";
 
 function displayName(user: { name?: string; nickname?: string } | null | undefined): string {
   if (!user) return "알 수 없음";
@@ -145,6 +146,7 @@ function PlayerStatsContent() {
               {currentUser.nickname && currentUser.name
                 ? `${currentUser.nickname}(${currentUser.name})`
                 : currentUser.nickname ?? currentUser.name}
+              <WinBadge wins={currentUser.leagueWins} />
             </span>
           )}
           <UserButton />
@@ -161,6 +163,7 @@ function PlayerStatsContent() {
             <div>
               <h2 className="text-xl font-bold text-gray-900">
                 {displayName(player)}
+                <WinBadge wins={player.leagueWins} />
                 {isMe && <span className="ml-1 text-sm font-normal text-blue-500">(나)</span>}
               </h2>
               {player.nickname && player.name && (
@@ -243,6 +246,7 @@ function PlayerStatsContent() {
                             className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors truncate"
                           >
                             {displayName(match.opponent)}
+                            <WinBadge wins={match.opponent?.leagueWins} />
                           </Link>
                         </div>
                         <span className="text-xs text-gray-400">{formatDate(match._creationTime)}</span>
@@ -328,6 +332,7 @@ function PlayerStatsContent() {
                           className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors truncate"
                         >
                           {displayName(match.opponent)}
+                          <WinBadge wins={match.opponent?.leagueWins} />
                         </Link>
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">

@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { getEffectiveRole, getOrCreateUser, SUPER_ADMIN_EMAIL } from "./utils";
+import { computeStandings } from "./scores";
 
 // 리그 목록 페이지에 필요한 데이터를 1회 요청으로 가져옴 (성능 최적화)
 export const getLeaguesPageData = query({
@@ -137,6 +138,40 @@ export const restore = mutation({
     // deletedAt 필드 제거를 위해 replace 사용
     const { deletedAt: _removed, ...rest } = league;
     await ctx.db.replace(args.id, rest);
+  },
+});
+
+// 리그 종료: 순위를 확정하고 1위 참가자에게 우승 횟수(leagueWins)를 지급.
+// 종료 후에도 관리자는 계속 스코어를 수정할 수 있음(scores.ts assertScoreWritable 참고),
+// 일반 사용자만 입력/수정이 차단됨. 재종료로 인한 중복 지급을 막기 위해 이미 종료된
+// 리그는 다시 종료할 수 없음.
+export const endLeague = mutation({
+  args: { id: v.id("leagues") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("인증되지 않은 사용자입니다.");
+    const role = await getEffectiveRole(ctx);
+    if (role !== "superAdmin" && role !== "admin") throw new Error("권한이 없습니다.");
+
+    const league = await ctx.db.get(args.id);
+    if (!league) throw new Error("리그를 찾을 수 없습니다.");
+    if (league.status === "ended") throw new Error("이미 종료된 리그입니다.");
+
+    const standings = await computeStandings(ctx, args.id);
+    const winner = standings.find((s) => s.games > 0) ?? null;
+
+    if (winner) {
+      const winnerUser = await ctx.db.get(winner.userId);
+      await ctx.db.patch(winner.userId, {
+        leagueWins: (winnerUser?.leagueWins ?? 0) + 1,
+      });
+    }
+
+    await ctx.db.patch(args.id, {
+      status: "ended",
+      endedAt: Date.now(),
+      winnerUserId: winner?.userId,
+    });
   },
 });
 

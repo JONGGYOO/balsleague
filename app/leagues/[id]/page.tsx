@@ -7,6 +7,7 @@ import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState, useRef, useEffect, useMemo } from "react";
+import { WinBadge } from "@/app/components/WinBadge";
 
 function displayName(user: { name?: string; nickname?: string } | null | undefined): string {
   if (!user) return "알 수 없음";
@@ -28,11 +29,27 @@ export default function LeagueDetailPage() {
   const addScore = useMutation(api.scores.add);
   const updateScore = useMutation(api.scores.updateScore);
   const deleteScore = useMutation(api.scores.remove);
+  const endLeague = useMutation(api.leagues.endLeague);
 
   const effectiveRole = currentUser?.effectiveRole ?? "user";
   const isManager = effectiveRole === "superAdmin" || effectiveRole === "admin";
   const isApproved = participationStatus === "approved";
-  const canEnterScore = isApproved; // 승인된 참가자만 스코어 입력 가능
+  const isEnded = league?.status === "ended";
+  // 승인된 참가자만 스코어 입력 가능. 종료된 리그는 관리자만 계속 입력/수정 가능
+  const canEnterScore = isApproved && (!isEnded || isManager);
+  const [ending, setEnding] = useState(false);
+
+  async function handleEndLeague() {
+    if (!confirm("리그를 종료할까요?\n순위가 확정되고 1위 참가자에게 우승 기록이 부여됩니다.\n(종료 후에도 관리자는 기록을 수정할 수 있습니다)")) return;
+    setEnding(true);
+    try {
+      await endLeague({ id: leagueId });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "오류가 발생했습니다.");
+    } finally {
+      setEnding(false);
+    }
+  }
 
   // 접근 제어: 일반 사용자는 승인된 참가자만 접근 가능
   useEffect(() => {
@@ -226,6 +243,11 @@ export default function LeagueDetailPage() {
               {league.year}년 {league.month}월
             </span>
             {league.name}
+            {isEnded && (
+              <span className="ml-2 text-xs font-medium text-gray-500 bg-gray-100 rounded-full px-2 py-0.5 align-middle">
+                종료됨
+              </span>
+            )}
           </h1>
         </div>
         <div className="flex items-center gap-3 ml-3 shrink-0">
@@ -239,6 +261,7 @@ export default function LeagueDetailPage() {
               {currentUser.nickname && currentUser.name
                 ? `${currentUser.nickname}(${currentUser.name})`
                 : currentUser.nickname ?? currentUser.name}
+              <WinBadge wins={currentUser.leagueWins} />
             </span>
           )}
           <UserButton />
@@ -246,6 +269,33 @@ export default function LeagueDetailPage() {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+        {/* 리그 관리 (종료) */}
+        {isManager && (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-5 py-4 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-gray-900">리그 관리</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {isEnded
+                  ? "이 리그는 종료되어 순위가 확정되었습니다. 관리자는 계속 기록을 수정할 수 있습니다."
+                  : "종료하면 순위가 확정되고 1위 참가자에게 우승 기록이 부여됩니다."}
+              </p>
+            </div>
+            {isEnded ? (
+              <span className="shrink-0 text-xs font-medium text-gray-500 bg-gray-100 rounded-full px-3 py-1.5">
+                종료됨
+              </span>
+            ) : (
+              <button
+                onClick={handleEndLeague}
+                disabled={ending}
+                className="shrink-0 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {ending ? "종료 중..." : "리그 종료"}
+              </button>
+            )}
+          </div>
+        )}
+
         {/* 참가자 현황 */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-5 py-3 flex items-center gap-3 text-sm text-gray-600">
@@ -281,6 +331,7 @@ export default function LeagueDetailPage() {
                       >
                         {displayName(p.user)}
                       </Link>
+                      <WinBadge wins={p.user?.leagueWins} />
                       {p.user?.organization && (
                         <span className="text-xs text-gray-400">{p.user.organization}</span>
                       )}
@@ -453,6 +504,7 @@ export default function LeagueDetailPage() {
                     <th className="px-4 py-3 text-center">무</th>
                     <th className="px-4 py-3 text-center">패</th>
                     <th className="px-4 py-3 text-center">득실</th>
+                    <th className="px-4 py-3 text-center">승점</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -468,6 +520,7 @@ export default function LeagueDetailPage() {
                           >
                             {displayName(entry.user)}
                           </Link>
+                          <WinBadge wins={entry.user?.leagueWins} />
                           {isMe && <span className="ml-1 text-xs text-blue-500">(나)</span>}
                           {entry.user?.organization && (
                             <span className="ml-1 text-xs text-gray-400">{entry.user.organization}</span>
@@ -480,6 +533,7 @@ export default function LeagueDetailPage() {
                         <td className="px-4 py-3 text-center font-medium text-gray-700">
                           {entry.goalDiff > 0 ? `+${entry.goalDiff}` : entry.goalDiff}
                         </td>
+                        <td className="px-4 py-3 text-center font-bold text-blue-700">{entry.points}</td>
                       </tr>
                     );
                   })}
@@ -527,6 +581,7 @@ export default function LeagueDetailPage() {
                         className={`flex-1 text-right text-sm font-medium hover:underline truncate ${homeWon ? "text-green-700" : draw ? "text-gray-700" : "text-gray-400"}`}
                       >
                         {displayName(match.homeUser)}
+                        <WinBadge wins={match.homeUser?.leagueWins} />
                       </Link>
 
                       {/* 스코어 or 편집 인풋 */}
@@ -563,6 +618,7 @@ export default function LeagueDetailPage() {
                         className={`flex-1 text-left text-sm font-medium hover:underline truncate ${awayWon ? "text-green-700" : draw ? "text-gray-700" : "text-gray-400"}`}
                       >
                         {displayName(match.awayUser)}
+                        <WinBadge wins={match.awayUser?.leagueWins} />
                       </Link>
 
                       {/* 수정/취소/저장 버튼 — 한 줄 */}
