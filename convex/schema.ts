@@ -14,6 +14,8 @@ export default defineSchema({
     birthMonth: v.optional(v.number()),
     birthDay: v.optional(v.number()),
     phone: v.optional(v.string()),
+    // 리그 종료 시 1위로 확정된 횟수 — 닉네임 옆 별/왕관 표시에 사용
+    leagueWins: v.optional(v.number()),
   }).index("by_token", ["tokenIdentifier"]),
 
   organizations: defineTable({
@@ -26,6 +28,11 @@ export default defineSchema({
     name: v.string(),
     createdBy: v.string(),
     deletedAt: v.optional(v.number()), // 소프트 삭제용 타임스탬프
+    // 종료된 리그는 순위가 확정되고 우승자에게 leagueWins가 지급됨.
+    // 종료 후에도 관리자는 계속 스코어를 입력/수정할 수 있음 (일반 사용자만 차단)
+    status: v.optional(v.union(v.literal("ongoing"), v.literal("ended"))),
+    endedAt: v.optional(v.number()),
+    winnerUserId: v.optional(v.id("users")),
   }).index("by_year_month", ["year", "month"]),
 
   leagueParticipants: defineTable({
@@ -74,6 +81,9 @@ export default defineSchema({
     status: v.optional(v.union(v.literal("pending"), v.literal("approved"))),
     team: v.optional(v.union(v.literal("A"), v.literal("B"))),
     teamOrder: v.optional(v.number()),
+    // 경기 시작 전 순번 고정 — 고정된 순번은 다른 인원이 스왑해서 들어올 수 없고,
+    // 순번 이동 시 고정된 자리를 건너뛰어 다음 빈 자리로 이동한다
+    orderLocked: v.optional(v.boolean()),
     // 성적기반 배정 시점의 점수 스냅샷 (리그:내전 가중치는 Grade.md 참고, 실제 비율은
     // convex/innerwars.ts의 SCORE_WEIGHT_LEAGUE/SCORE_WEIGHT_INNERWAR 상수가 정답)
     // 랜덤/수동 배정 시에는 초기화되어 undefined가 됨
