@@ -4,13 +4,21 @@ import { v } from "convex/values";
 // 월별 우수 클랜원 시상 — 2026년 7월부터 집계 시작
 export const AWARDS_START_YEAR = 2026;
 export const AWARDS_START_MONTH = 7;
-// 산출 근거: 해당 월에 열린 리그/내전 기준으로 참여한 경기 수만큼 부여 (승패 무관)
+// 산출 근거: 그 달에 "실제로 진행된"(기록이 입력된) 경기 수만큼 부여 (승패 무관)
 export const POINTS_PER_LEAGUE_GAME = 2;
 export const POINTS_PER_INNERWAR_GAME = 1;
 
-// 지정한 연/월에 대한 리그·내전 경기 참여 점수를 실시간 집계.
-// 대상은 전체 사용자(경기가 없으면 0점으로 표시). 리그/내전은 자체 year/month 필드 기준으로
-// 그 달에 "열린" 이벤트로 간주한다(경기 입력 시점이 아니라 리그/내전이 속한 달).
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+// 리그/내전 레코드 자체의 year/month가 아니라, 실제 경기가 기록된 시각(_creationTime) 기준으로
+// 그 달을 판정한다. 예: "2026년 6월" 리그가 계속 진행 중이더라도 7월에 치른 경기는 7월 집계에 포함.
+// 서버 런타임 시간대와 무관하게 한국시간(KST, UTC+9) 기준 달력으로 계산한다.
+function kstYearMonth(creationTime: number): { year: number; month: number } {
+  const d = new Date(creationTime + KST_OFFSET_MS);
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1 };
+}
+
+// 지정한 연/월에 "실제로 진행된" 리그·내전 경기 참여 점수를 실시간 집계.
+// 대상은 전체 사용자(경기가 없으면 0점으로 표시).
 export const getMonthlyAwards = query({
   args: { year: v.number(), month: v.number() },
   handler: async (ctx, args) => {
@@ -30,35 +38,34 @@ export const getMonthlyAwards = query({
     }
 
     if (!beforeStart) {
+      // 삭제된(테스트용 등) 리그/내전의 경기는 집계에서 제외
       const allLeagues = await ctx.db.query("leagues").take(500);
-      const targetLeagues = allLeagues.filter(
-        (l) => !l.deletedAt && l.year === args.year && l.month === args.month
+      const validLeagueIds = new Set(
+        allLeagues.filter((l) => !l.deletedAt).map((l) => l._id)
       );
-      for (const league of targetLeagues) {
-        const scores = await ctx.db
-          .query("scores")
-          .withIndex("by_league", (q) => q.eq("leagueId", league._id))
-          .take(500);
-        for (const s of scores) {
-          bump(s.homeUserId, "leagueGames");
-          bump(s.awayUserId, "leagueGames");
-        }
+
+      const allScores = await ctx.db.query("scores").take(5000);
+      for (const s of allScores) {
+        if (!validLeagueIds.has(s.leagueId)) continue;
+        const ym = kstYearMonth(s._creationTime);
+        if (ym.year !== args.year || ym.month !== args.month) continue;
+        bump(s.homeUserId, "leagueGames");
+        bump(s.awayUserId, "leagueGames");
       }
 
       const allInnerwars = await ctx.db.query("innerwars").take(500);
-      const targetInnerwars = allInnerwars.filter(
-        (w) => !w.deletedAt && w.year === args.year && w.month === args.month
+      const validInnerwarIds = new Set(
+        allInnerwars.filter((w) => !w.deletedAt).map((w) => w._id)
       );
-      for (const innerwar of targetInnerwars) {
-        const matches = await ctx.db
-          .query("innerwarMatches")
-          .withIndex("by_innerwar", (q) => q.eq("innerwarId", innerwar._id))
-          .take(500);
-        for (const m of matches) {
-          if (m.status !== "done") continue;
-          bump(m.playerAId, "innerwarGames");
-          bump(m.playerBId, "innerwarGames");
-        }
+
+      const allMatches = await ctx.db.query("innerwarMatches").take(5000);
+      for (const m of allMatches) {
+        if (m.status !== "done") continue;
+        if (!validInnerwarIds.has(m.innerwarId)) continue;
+        const ym = kstYearMonth(m._creationTime);
+        if (ym.year !== args.year || ym.month !== args.month) continue;
+        bump(m.playerAId, "innerwarGames");
+        bump(m.playerBId, "innerwarGames");
       }
     }
 

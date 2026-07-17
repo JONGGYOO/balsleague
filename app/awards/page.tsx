@@ -113,9 +113,10 @@ export default function AwardsPage() {
 
         {data && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-800">
-            산출 근거: 그 달에 열린 <strong>리그</strong> 경기 1경기당 {data.pointsPerLeagueGame}점,{" "}
-            <strong>내전</strong> 경기 1경기당 {data.pointsPerInnerwarGame}점을 부여합니다(승패 무관, 참여 경기 수 기준).
-            전체 사용자를 대상으로 하며 경기 기록이 없으면 0점으로 표시됩니다.
+            산출 근거: <strong>실제로 경기를 치른 달</strong> 기준으로, <strong>리그</strong> 경기 1경기당{" "}
+            {data.pointsPerLeagueGame}점, <strong>내전</strong> 경기 1경기당 {data.pointsPerInnerwarGame}점을
+            부여합니다(승패 무관, 참여 경기 수 기준). 예를 들어 6월 리그라도 실제 경기를 7월에 치렀다면 7월
+            집계에 포함됩니다. 전체 사용자를 대상으로 하며 경기 기록이 없으면 0점으로 표시됩니다.
           </div>
         )}
 
