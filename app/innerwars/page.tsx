@@ -135,10 +135,10 @@ export default function InnerwarsPage() {
     await removeInnerwar({ id });
   }
 
-  async function handleJoin(innerwarId: Id<"innerwars">) {
+  async function handleJoin(innerwarId: Id<"innerwars">, team?: "A" | "B") {
     setJoiningId(innerwarId);
     try {
-      await joinInnerwar({ innerwarId });
+      await joinInnerwar({ innerwarId, team });
     } finally {
       setJoiningId(null);
     }
@@ -313,7 +313,26 @@ export default function InnerwarsPage() {
                       </div>
 
                       <div className="flex items-center gap-2 ml-3 shrink-0">
-                        {!isApproved && (
+                        {/* 10-1: 경기 중인 내전은 팀을 선택해 참가해야 x로 뺀 빈자리를 채울 수 있다 */}
+                        {!isApproved && w.status === "inProgress" && (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleJoin(w._id, "A")}
+                              disabled={isProcessing}
+                              className="rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                            >
+                              A팀
+                            </button>
+                            <button
+                              onClick={() => handleJoin(w._id, "B")}
+                              disabled={isProcessing}
+                              className="rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                            >
+                              B팀
+                            </button>
+                          </div>
+                        )}
+                        {!isApproved && w.status !== "inProgress" && (
                           <button
                             onClick={() => handleJoin(w._id)}
                             disabled={isProcessing}

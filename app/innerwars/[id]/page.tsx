@@ -186,9 +186,9 @@ export default function InnerwarDetailPage() {
     return Object.entries(result).sort((a, b) => b[1].wins - a[1].wins);
   }, [completedMatches, approvedParticipants]);
 
-  async function handleJoin() {
+  async function handleJoin(team?: "A" | "B") {
     setJoining(true);
-    try { await joinInnerwar({ innerwarId }); }
+    try { await joinInnerwar({ innerwarId, team }); }
     finally { setJoining(false); }
   }
 
@@ -537,9 +537,29 @@ export default function InnerwarDetailPage() {
           <div className="bg-white rounded-xl border border-gray-200 px-5 py-4 shadow-sm flex items-center justify-between">
             <span className="text-sm font-medium text-gray-700">내 참가 상태</span>
             <div className="flex items-center gap-2">
-              {!myParticipation && (
+              {/* 10-1: 경기 진행 중에는 팀을 선택해 참가해야 x로 뺀 빈자리를 채울 수 있다 */}
+              {!myParticipation && status === "inProgress" && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-gray-400">빈자리 참가</span>
+                  <button
+                    onClick={() => handleJoin("A")}
+                    disabled={joining}
+                    className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {joining ? "처리 중..." : "A팀 참가"}
+                  </button>
+                  <button
+                    onClick={() => handleJoin("B")}
+                    disabled={joining}
+                    className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {joining ? "처리 중..." : "B팀 참가"}
+                  </button>
+                </div>
+              )}
+              {!myParticipation && status !== "inProgress" && (
                 <button
-                  onClick={handleJoin}
+                  onClick={() => handleJoin()}
                   disabled={joining}
                   className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                 >

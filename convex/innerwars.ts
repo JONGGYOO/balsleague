@@ -311,8 +311,14 @@ export const remove = mutation({
 });
 
 // 3-1: 승인 절차 없이 바로 참가
+// 10-1: 경기 시작 후에는 setPlayerTeam이 막혀 있어(진행 중인 매치 훼손 방지) 새로 참가한
+//       선수가 팀 미배정 상태로 남아 빈자리를 채울 수 없었다. 참가 신청 시 team을 함께
+//       넘기면 해당 팀 맨 뒤 순번으로 바로 배정해 x로 뺀 빈자리(팀 인원 축소분)를 채운다.
 export const join = mutation({
-  args: { innerwarId: v.id("innerwars") },
+  args: {
+    innerwarId: v.id("innerwars"),
+    team: v.optional(v.union(v.literal("A"), v.literal("B"))),
+  },
   handler: async (ctx, args) => {
     const user = await getOrCreateUser(ctx);
 
@@ -323,6 +329,28 @@ export const join = mutation({
       )
       .unique();
     if (existing) return;
+
+    const innerwar = await ctx.db.get(args.innerwarId);
+    if (!innerwar || innerwar.deletedAt) throw new Error("내전을 찾을 수 없습니다.");
+
+    if (args.team && (innerwar.status === "inProgress" || innerwar.status === "teamAssigned")) {
+      const allInTeam = await ctx.db
+        .query("innerwarParticipants")
+        .withIndex("by_innerwar", (q) => q.eq("innerwarId", args.innerwarId))
+        .take(200);
+      const maxOrder = allInTeam
+        .filter((p) => p.team === args.team)
+        .reduce((max, p) => Math.max(max, p.teamOrder ?? -1), -1);
+
+      await ctx.db.insert("innerwarParticipants", {
+        innerwarId: args.innerwarId,
+        userId: user._id,
+        status: "approved",
+        team: args.team,
+        teamOrder: maxOrder + 1,
+      });
+      return;
+    }
 
     await ctx.db.insert("innerwarParticipants", {
       innerwarId: args.innerwarId,
