@@ -772,8 +772,10 @@ export const reorderTeamMember = mutation({
   },
 });
 
-// 수정4: 경기 시작 전 순번 고정/해제 — 본인만 자신의 자리를 고정/해제할 수 있고
-// (관리자는 대신 처리 가능), 경기 시작 후에는 변경할 수 없다.
+// 수정4: 순번 고정/해제 — 본인만 자신의 자리를 고정/해제할 수 있고
+// (관리자는 다른 인원의 자리도 대신 처리 가능).
+// 수정(7/21): 경기 시작(inProgress) 이후에도 본인/관리자는 계속 고정/해제할 수 있으며,
+// 경기가 종료(done)된 이후에만 더 이상 변경할 수 없다.
 export const toggleOrderLock = mutation({
   args: { participantId: v.id("innerwarParticipants") },
   handler: async (ctx, args) => {
@@ -786,8 +788,8 @@ export const toggleOrderLock = mutation({
 
     const innerwar = await ctx.db.get(participant.innerwarId);
     if (!innerwar) throw new Error("내전을 찾을 수 없습니다.");
-    if (innerwar.status === "inProgress" || innerwar.status === "done") {
-      throw new Error("경기 시작 후에는 순번 고정을 변경할 수 없습니다.");
+    if (innerwar.status === "done") {
+      throw new Error("경기가 종료되어 순번 고정을 변경할 수 없습니다.");
     }
 
     const role = await getEffectiveRole(ctx);

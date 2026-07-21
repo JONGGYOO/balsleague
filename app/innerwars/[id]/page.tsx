@@ -370,12 +370,14 @@ export default function InnerwarDetailPage() {
     );
   }
 
-  // 수정4: 경기 시작 전에만 노출되는 순번 고정/해제 버튼 — 본인 또는 관리자만 조작 가능.
+  // 수정4: 순번 고정/해제 버튼 — 본인 또는 관리자만 조작 가능.
   // 고정하면 다른 인원이 그 자리로 스왑해 들어올 수 없고, 순번 이동 시 고정된 자리를 건너뛴다.
+  // 수정(7/21): 경기 종료(done) 전까지는 계속 노출 — 경기 시작(inProgress) 이후에도
+  // 본인은 자신의 자리를, 관리자는 다른 인원의 자리도 고정/해제할 수 있다.
   function renderLockButton(p: typeof approvedParticipants[0]) {
     if (!p.team) return null;
     const st = innerwar?.status ?? "draft";
-    if (st !== "draft" && st !== "teamAssigned") return null;
+    if (st === "done") return null;
     const canToggle = isManager || (!!currentUser && p.userId === currentUser._id);
     if (!canToggle) return null;
     return (
@@ -938,6 +940,8 @@ export default function InnerwarDetailPage() {
                           {isPlaying && <span className="ml-1 text-xs">▶</span>}
                         </span>
                         <div className="flex items-center gap-1">
+                          {/* 7/21: 경기 시작 후에도 본인/관리자는 순번 고정·해제 가능 */}
+                          {renderLockButton(p)}
                           {/* 8-2: 아직 경기하지 않은 선수만 순번 변경 가능 */}
                           {renderOrderButtons(p, idx, teamA.length, currentIdx, activeMatchScored)}
                           {/* 9-1: 아직 경기하지 않은 선수는 관리자가 제외 가능 */}
@@ -974,6 +978,8 @@ export default function InnerwarDetailPage() {
                           {isPlaying && <span className="ml-1 text-xs">▶</span>}
                         </span>
                         <div className="flex items-center gap-1">
+                          {/* 7/21: 경기 시작 후에도 본인/관리자는 순번 고정·해제 가능 */}
+                          {renderLockButton(p)}
                           {/* 8-2: 아직 경기하지 않은 선수만 순번 변경 가능 */}
                           {renderOrderButtons(p, idx, teamB.length, currentIdx, activeMatchScored)}
                           {/* 9-1: 아직 경기하지 않은 선수는 관리자가 제외 가능 */}

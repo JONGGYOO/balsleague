@@ -6,7 +6,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, Suspense } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
 import { WinBadge } from "@/app/components/WinBadge";
 
 function displayName(user: { name?: string; nickname?: string } | null | undefined): string {
@@ -100,6 +100,20 @@ function PlayerStatsContent() {
 
   const currentUser = useQuery(api.users.getCurrentUser);
   const stats = useQuery(api.scores.getPlayerStats, { userId, leagueId });
+  const leagueParticipants = useQuery(
+    api.leagues.getParticipants,
+    leagueId ? { leagueId } : "skip"
+  );
+  const [showUnplayed, setShowUnplayed] = useState(false);
+
+  const unplayedParticipants = useMemo(() => {
+    if (!leagueParticipants || !stats || !leagueId) return [];
+    const currentMatches = stats.matches.filter((m) => m.leagueId === leagueId);
+    const playedIds = new Set(currentMatches.map((m) => m.oppId));
+    return leagueParticipants.filter(
+      (p) => p.userId !== userId && !playedIds.has(p.userId)
+    );
+  }, [leagueParticipants, stats, userId, leagueId]);
 
   useEffect(() => {
     if (currentUser === null) router.replace("/sign-in");
@@ -255,6 +269,47 @@ function PlayerStatsContent() {
                   );
                 })}
               </ul>
+            )}
+          </div>
+        )}
+
+        {/* 3.5 아직 대결 안 한 참가자 (현재 리그) */}
+        {leagueId && (
+          <div className="bg-white rounded-xl border border-blue-100 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 bg-blue-50 flex items-center gap-3">
+              <button
+                onClick={() => setShowUnplayed((v) => !v)}
+                className="text-sm font-semibold text-blue-700 hover:text-blue-800 flex items-center gap-1"
+              >
+                아직 대결 안 한 참가자 {unplayedParticipants.length}명
+                <span className="text-xs">{showUnplayed ? "▲" : "▼"}</span>
+              </button>
+            </div>
+            {showUnplayed && (
+              <div className="border-t border-blue-50 px-5 py-3">
+                {leagueParticipants === undefined ? (
+                  <p className="text-sm text-gray-400">불러오는 중...</p>
+                ) : unplayedParticipants.length === 0 ? (
+                  <p className="text-sm text-gray-400">모든 참가자와 대결했습니다.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {unplayedParticipants.map((p) => (
+                      <li key={p._id} className="flex items-center gap-2 text-sm">
+                        <Link
+                          href={`/players/${p.userId}?league=${leagueId}`}
+                          className="font-medium text-gray-800 hover:underline"
+                        >
+                          {displayName(p.user)}
+                        </Link>
+                        <WinBadge wins={p.user?.leagueWins} />
+                        {p.user?.organization && (
+                          <span className="text-xs text-gray-400">{p.user.organization}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
           </div>
         )}
