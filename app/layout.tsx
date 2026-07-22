@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ConvexClientProvider } from "./ConvexClientProvider";
@@ -21,6 +21,12 @@ export const metadata: Metadata = {
   description: "발스리그 - 리그 및 내전 관리",
   icons: {
     icon: "/bals-logo.png",
+    apple: "/apple-touch-icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    title: "발스리그",
+    statusBarStyle: "default",
   },
   openGraph: {
     title: "발스리그",
@@ -37,6 +43,12 @@ export const metadata: Metadata = {
     description: "발스리그 - 리그 및 내전 관리",
     images: ["/bals-logo.png"],
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#f97316",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
