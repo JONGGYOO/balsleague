@@ -8,7 +8,8 @@ export default defineSchema({
     name: v.optional(v.string()),
     nickname: v.optional(v.string()),
     organization: v.optional(v.string()),
-    role: v.optional(v.literal("admin")), // superAdmin은 이메일로 판단
+    // superAdmin은 이메일로 판단. innerwarAdmin은 내전 추가만 가능한 역할.
+    role: v.optional(v.union(v.literal("admin"), v.literal("innerwarAdmin"))),
     profileSaved: v.optional(v.boolean()),
     birthYear: v.optional(v.number()),
     birthMonth: v.optional(v.number()),
@@ -21,6 +22,20 @@ export default defineSchema({
   organizations: defineTable({
     name: v.string(),
   }).index("by_name", ["name"]),
+
+  // 타클랜사용자: 로그인은 하지 않지만 차후 클랜전 관리를 위해 관리자가 클랜별로 등록해두는 인원
+  otherClanUsers: defineTable({
+    organizationName: v.string(),
+    nickname: v.string(),
+    name: v.optional(v.string()),
+    previousNickname: v.optional(v.string()),
+    // 실력 평가: 초고수(god) / 고수(high) / 중수(mid) / 하수(low)
+    skillTier: v.optional(
+      v.union(v.literal("god"), v.literal("high"), v.literal("mid"), v.literal("low"))
+    ),
+    memo: v.optional(v.string()),
+    createdBy: v.string(),
+  }).index("by_organization", ["organizationName"]),
 
   leagues: defineTable({
     year: v.number(),

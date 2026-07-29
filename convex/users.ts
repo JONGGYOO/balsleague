@@ -18,12 +18,14 @@ export const getCurrentUser = query({
     if (!user) return null;
 
     const email = identity.email ?? user.email ?? "";
-    const effectiveRole: "superAdmin" | "admin" | "user" =
+    const effectiveRole: "superAdmin" | "admin" | "innerwarAdmin" | "user" =
       email === SUPER_ADMIN_EMAIL
         ? "superAdmin"
         : user.role === "admin"
           ? "admin"
-          : "user";
+          : user.role === "innerwarAdmin"
+            ? "innerwarAdmin"
+            : "user";
 
     return { ...user, effectiveRole, email };
   },
@@ -105,7 +107,7 @@ export const listAll = query({
 export const setRole = mutation({
   args: {
     userId: v.id("users"),
-    role: v.optional(v.literal("admin")),
+    role: v.optional(v.union(v.literal("admin"), v.literal("innerwarAdmin"))),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();

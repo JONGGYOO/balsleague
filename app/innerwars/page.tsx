@@ -68,6 +68,8 @@ export default function InnerwarsPage() {
 
   const effectiveRole = currentUser?.effectiveRole ?? "user";
   const isManager = effectiveRole === "superAdmin" || effectiveRole === "admin";
+  // 내전관리자는 내전 추가만 가능 (수정/삭제, 관리자 패널 접근은 불가)
+  const canCreateInnerwar = isManager || effectiveRole === "innerwarAdmin";
 
   const participationMap = useMemo(() => {
     const map = new Map<string, "pending" | "approved">();
@@ -221,7 +223,7 @@ export default function InnerwarsPage() {
       <main className="max-w-2xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-semibold text-gray-800">내전 목록</h2>
-          {isManager && (
+          {canCreateInnerwar && (
             <button
               onClick={openCreate}
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
@@ -382,7 +384,7 @@ export default function InnerwarsPage() {
         )}
       </main>
 
-      {showModal && isManager && (
+      {showModal && canCreateInnerwar && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
           onClick={(e) => e.target === e.currentTarget && closeModal()}

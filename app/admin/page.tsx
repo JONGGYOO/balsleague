@@ -14,7 +14,7 @@ function displayName(user: { name?: string; nickname?: string; email?: string } 
   return user.nickname ?? user.name ?? user.email ?? "이름 없음";
 }
 
-type Tab = "participants" | "clans" | "users" | "deleted";
+type Tab = "participants" | "clans" | "otherClanUsers" | "users" | "deleted";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -75,6 +75,9 @@ export default function AdminPage() {
           <TabButton active={activeTab === "clans"} onClick={() => setActiveTab("clans")}>
             클랜 관리
           </TabButton>
+          <TabButton active={activeTab === "otherClanUsers"} onClick={() => setActiveTab("otherClanUsers")}>
+            타클랜 사용자
+          </TabButton>
           {isManager && (
             <TabButton active={activeTab === "users"} onClick={() => setActiveTab("users")}>
               사용자 역할
@@ -89,6 +92,7 @@ export default function AdminPage() {
 
         {activeTab === "participants" && <PendingParticipants />}
         {activeTab === "clans" && <ClanManagement />}
+        {activeTab === "otherClanUsers" && <OtherClanUserManagement />}
         {activeTab === "users" && isManager && <UserManagement isSuperAdmin={isSuperAdmin} />}
         {activeTab === "deleted" && isSuperAdmin && <DeletedLeagues />}
       </main>
@@ -278,16 +282,225 @@ function ClanManagement() {
   );
 }
 
+const SKILL_TIER_LABEL: Record<string, string> = {
+  god: "초고수",
+  high: "고수",
+  mid: "중수",
+  low: "하수",
+};
+
+function OtherClanUserManagement() {
+  const orgs = useQuery(api.organizations.list);
+  const [selectedOrg, setSelectedOrg] = useState<string | null>(null);
+  const effectiveOrg = selectedOrg !== null ? selectedOrg : (orgs?.[0]?.name ?? "");
+  const members = useQuery(
+    api.otherClanUsers.list,
+    effectiveOrg ? { organizationName: effectiveOrg } : "skip"
+  );
+  const createMember = useMutation(api.otherClanUsers.create);
+  const removeMember = useMutation(api.otherClanUsers.remove);
+
+  const [nickname, setNickname] = useState("");
+  const [name, setName] = useState("");
+  const [previousNickname, setPreviousNickname] = useState("");
+  const [skillTier, setSkillTier] = useState("");
+  const [memo, setMemo] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!effectiveOrg || !nickname.trim()) return;
+    setSubmitting(true);
+    try {
+      await createMember({
+        organizationName: effectiveOrg,
+        nickname: nickname.trim(),
+        name: name.trim() || undefined,
+        previousNickname: previousNickname.trim() || undefined,
+        skillTier: skillTier ? (skillTier as "god" | "high" | "mid" | "low") : undefined,
+        memo: memo.trim() || undefined,
+      });
+      setNickname("");
+      setName("");
+      setPreviousNickname("");
+      setSkillTier("");
+      setMemo("");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleRemove(id: Id<"otherClanUsers">) {
+    if (!confirm("이 사용자를 삭제할까요?")) return;
+    await removeMember({ id });
+  }
+
+  const inputClass =
+    "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500";
+
+  if (orgs === undefined) {
+    return <div className="text-center py-12 text-gray-400 text-sm">불러오는 중...</div>;
+  }
+
+  if (orgs.length === 0) {
+    return (
+      <div className="text-center py-12 text-gray-400 text-sm">
+        등록된 클랜이 없습니다. 먼저 클랜 관리에서 클랜을 추가해주세요.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-gray-500">
+        로그인하지 않는 타클랜 인원을 클랜별로 등록해 차후 클랜전 관리에 활용합니다.
+      </p>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-gray-700">클랜</label>
+        <select
+          value={effectiveOrg}
+          onChange={(e) => setSelectedOrg(e.target.value)}
+          className={inputClass}
+        >
+          {orgs.map((org) => (
+            <option key={org._id} value={org.name}>{org.name}</option>
+          ))}
+        </select>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-3 bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              닉네임 <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              placeholder="닉네임"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">이름</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="이름"
+              className={inputClass}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">이전 닉네임</label>
+            <input
+              type="text"
+              value={previousNickname}
+              onChange={(e) => setPreviousNickname(e.target.value)}
+              placeholder="이전 닉네임"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">실력 평가</label>
+            <select
+              value={skillTier}
+              onChange={(e) => setSkillTier(e.target.value)}
+              className={inputClass}
+            >
+              <option value="">선택 안 함</option>
+              <option value="god">초고수</option>
+              <option value="high">고수</option>
+              <option value="mid">중수</option>
+              <option value="low">하수</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">기타</label>
+          <textarea
+            value={memo}
+            onChange={(e) => setMemo(e.target.value)}
+            placeholder="기타 참고 사항"
+            rows={2}
+            className={inputClass}
+          />
+        </div>
+
+        <button
+          type="submit"
+          disabled={submitting || !effectiveOrg || !nickname.trim()}
+          className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+        >
+          {submitting ? "등록 중..." : "+ 등록"}
+        </button>
+      </form>
+
+      {members === undefined ? (
+        <div className="text-center py-8 text-gray-400 text-sm">불러오는 중...</div>
+      ) : members.length === 0 ? (
+        <div className="text-center py-8 text-gray-400 text-sm">등록된 타클랜 사용자가 없습니다.</div>
+      ) : (
+        <div className="space-y-2">
+          {members.map((m) => (
+            <div
+              key={m._id}
+              className="bg-white rounded-xl border border-gray-200 px-5 py-3 flex items-center justify-between shadow-sm"
+            >
+              <div className="min-w-0">
+                <p className="font-semibold text-gray-900">
+                  {m.nickname}
+                  {m.name && <span className="ml-1.5 text-sm font-normal text-gray-500">({m.name})</span>}
+                  {m.skillTier && (
+                    <span className="ml-2 text-xs font-medium text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
+                      {SKILL_TIER_LABEL[m.skillTier]}
+                    </span>
+                  )}
+                </p>
+                <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-gray-400">
+                  {m.previousNickname && <span>이전 닉네임: {m.previousNickname}</span>}
+                  {m.memo && <span className="truncate">{m.memo}</span>}
+                </div>
+              </div>
+              <button
+                onClick={() => handleRemove(m._id)}
+                className="shrink-0 text-sm text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded ml-3"
+              >
+                삭제
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const ROLE_LABEL: Record<string, string> = {
+  admin: "관리자",
+  innerwarAdmin: "내전관리자",
+  user: "일반 사용자",
+};
+
 function UserManagement({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const users = useQuery(api.users.listAll);
   const setRole = useMutation(api.users.setRole);
   const currentUser = useQuery(api.users.getCurrentUser);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
-  async function handleToggleAdmin(userId: Id<"users">, isAdmin: boolean) {
+  async function handleRoleChange(userId: Id<"users">, value: string) {
     setProcessingId(userId);
     try {
-      await setRole({ userId, role: isAdmin ? undefined : "admin" });
+      await setRole({
+        userId,
+        role: value === "" ? undefined : (value as "admin" | "innerwarAdmin"),
+      });
     } finally {
       setProcessingId(null);
     }
@@ -311,6 +524,7 @@ function UserManagement({ isSuperAdmin }: { isSuperAdmin: boolean }) {
       {users.map((user) => {
         const isSelf = user._id === currentUser?._id;
         const isAdmin = user.role === "admin";
+        const isInnerwarAdmin = user.role === "innerwarAdmin";
         const isProcessing = processingId === user._id;
 
         const birthDate = [user.birthYear, user.birthMonth, user.birthDay]
@@ -334,6 +548,10 @@ function UserManagement({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                   {isAdmin ? (
                     <span className="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
                       관리자
+                    </span>
+                  ) : isInnerwarAdmin ? (
+                    <span className="text-xs font-medium text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
+                      내전관리자
                     </span>
                   ) : (
                     <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
@@ -363,17 +581,16 @@ function UserManagement({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                 </div>
               </div>
               {isSuperAdmin && !isSelf && (
-                <button
-                  onClick={() => handleToggleAdmin(user._id, isAdmin)}
+                <select
+                  value={user.role ?? ""}
+                  onChange={(e) => handleRoleChange(user._id, e.target.value)}
                   disabled={isProcessing}
-                  className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50 ${
-                    isAdmin
-                      ? "border border-gray-300 text-gray-600 hover:bg-gray-50"
-                      : "bg-indigo-600 text-white hover:bg-indigo-700"
-                  }`}
+                  className="shrink-0 rounded-lg border border-gray-300 px-2 py-1.5 text-xs font-semibold text-gray-700 disabled:opacity-50 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 >
-                  {isProcessing ? "처리 중..." : isAdmin ? "관리자 해제" : "관리자 지정"}
-                </button>
+                  <option value="">{ROLE_LABEL.user}</option>
+                  <option value="admin">{ROLE_LABEL.admin}</option>
+                  <option value="innerwarAdmin">{ROLE_LABEL.innerwarAdmin}</option>
+                </select>
               )}
             </div>
           </div>

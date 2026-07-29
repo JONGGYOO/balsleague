@@ -36,12 +36,14 @@ export const getInnerwarsPageData = query({
     if (!user) return { user: null, innerwars: [], participations: [] };
 
     const email = identity.email ?? user.email ?? "";
-    const effectiveRole: "superAdmin" | "admin" | "user" =
+    const effectiveRole: "superAdmin" | "admin" | "innerwarAdmin" | "user" =
       email === SUPER_ADMIN_EMAIL
         ? "superAdmin"
         : user.role === "admin"
           ? "admin"
-          : "user";
+          : user.role === "innerwarAdmin"
+            ? "innerwarAdmin"
+            : "user";
 
     const all = await ctx.db.query("innerwars").order("desc").take(200);
     const innerwars = all.filter((w) => !w.deletedAt);
@@ -246,7 +248,9 @@ export const create = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("인증되지 않은 사용자입니다.");
     const role = await getEffectiveRole(ctx);
-    if (role !== "superAdmin" && role !== "admin") throw new Error("권한이 없습니다.");
+    if (role !== "superAdmin" && role !== "admin" && role !== "innerwarAdmin") {
+      throw new Error("권한이 없습니다.");
+    }
 
     return await ctx.db.insert("innerwars", {
       year: args.year,

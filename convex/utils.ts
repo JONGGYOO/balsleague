@@ -7,7 +7,7 @@ type ReadCtx = Pick<QueryCtx, "auth" | "db">;
 
 export async function getEffectiveRole(
   ctx: ReadCtx
-): Promise<"superAdmin" | "admin" | "user"> {
+): Promise<"superAdmin" | "admin" | "innerwarAdmin" | "user"> {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) return "user";
 
@@ -23,7 +23,9 @@ export async function getEffectiveRole(
   // Clerk JWT에 email 클레임이 없는 경우 DB에 저장된 이메일로 판별 (1-1 버그 대응)
   if ((user?.email ?? "") === SUPER_ADMIN_EMAIL) return "superAdmin";
 
-  return user?.role === "admin" ? "admin" : "user";
+  if (user?.role === "admin") return "admin";
+  if (user?.role === "innerwarAdmin") return "innerwarAdmin";
+  return "user";
 }
 
 // 인증된 사용자의 DB 레코드를 가져오거나, 없으면 자동 생성합니다.
