@@ -81,6 +81,7 @@ function InnerwarRankingContent() {
                     <th className="px-4 py-3 text-center">팀승</th>
                     <th className="px-4 py-3 text-center">팀패</th>
                     <th className="px-4 py-3 text-center">승패율</th>
+                    <th className="px-4 py-3 text-center">버스력</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -111,6 +112,17 @@ function InnerwarRankingContent() {
                           <span className="text-green-600">{entry.winRate}%</span>
                           <span className="text-gray-400">, </span>
                           <span className="text-red-500">{entry.lossRate}%</span>
+                        </td>
+                        <td
+                          className={`px-4 py-3 text-center font-semibold ${
+                            entry.busPower > 0
+                              ? "text-amber-600"
+                              : entry.busPower < 0
+                                ? "text-blue-500"
+                                : "text-gray-400"
+                          }`}
+                        >
+                          {entry.busPower > 0 ? `+${entry.busPower}` : entry.busPower}%
                         </td>
                       </tr>
                     );
