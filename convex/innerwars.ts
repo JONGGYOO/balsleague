@@ -119,13 +119,50 @@ export const getInnerwarYearlyStandings = query({
       apply(entryFor(m.playerBId), scoreB, scoreA);
     }
 
+    // 승률/패율은 개별 경기(1:1) 단위가 아니라 "내전마다 소속 팀이 최종 승리했는가"를 기준으로 집계한다.
+    // status가 "done"인 내전은 항상 winnerTeam("A"/"B")이 함께 확정되므로 이를 완료된 내전으로 간주한다.
+    const doneInnerwarMap = new Map<string, Doc<"innerwars">>(
+      innerwars
+        .filter((w) => relevantInnerwarIds.has(w._id) && w.status === "done" && !!w.winnerTeam)
+        .map((w) => [w._id, w])
+    );
+
+    const allParticipants = await ctx.db.query("innerwarParticipants").take(5000);
+    const relevantParticipants = allParticipants.filter(
+      (p) => doneInnerwarMap.has(p.innerwarId) && (p.team === "A" || p.team === "B")
+    );
+
+    type TeamRecord = { innerwarsPlayed: number; innerwarWins: number };
+    const teamStatsMap = new Map<string, TeamRecord>();
+    function teamEntryFor(userId: Id<"users">): TeamRecord {
+      let t = teamStatsMap.get(userId);
+      if (!t) {
+        t = { innerwarsPlayed: 0, innerwarWins: 0 };
+        teamStatsMap.set(userId, t);
+      }
+      return t;
+    }
+    for (const p of relevantParticipants) {
+      const innerwar = doneInnerwarMap.get(p.innerwarId)!;
+      const t = teamEntryFor(p.userId);
+      t.innerwarsPlayed++;
+      if (p.team === innerwar.winnerTeam) t.innerwarWins++;
+    }
+
     const standings = await Promise.all(
       Array.from(statsMap.values()).map(async (e) => {
         const player = await ctx.db.get(e.userId);
         const goalDiff = e.goalsFor - e.goalsAgainst;
         const points = e.wins * POINTS_WIN + e.draws * POINTS_DRAW;
-        const winRate = e.games > 0 ? Math.round((e.wins / e.games) * 1000) / 10 : 0;
-        const lossRate = e.games > 0 ? Math.round((e.losses / e.games) * 1000) / 10 : 0;
+        const team = teamStatsMap.get(e.userId);
+        const innerwarsPlayed = team?.innerwarsPlayed ?? 0;
+        const innerwarWins = team?.innerwarWins ?? 0;
+        const winRate =
+          innerwarsPlayed > 0 ? Math.round((innerwarWins / innerwarsPlayed) * 1000) / 10 : 0;
+        const lossRate =
+          innerwarsPlayed > 0
+            ? Math.round(((innerwarsPlayed - innerwarWins) / innerwarsPlayed) * 1000) / 10
+            : 0;
         return { ...e, user: player, goalDiff, points, winRate, lossRate };
       })
     );
