@@ -76,7 +76,7 @@ export default function AdminPage() {
             클랜 관리
           </TabButton>
           <TabButton active={activeTab === "otherClanUsers"} onClick={() => setActiveTab("otherClanUsers")}>
-            타클랜 사용자
+            타클랜 선수
           </TabButton>
           {isManager && (
             <TabButton active={activeTab === "users"} onClick={() => setActiveTab("users")}>

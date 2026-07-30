@@ -61,6 +61,86 @@ export const getInnerwarsPageData = query({
   },
 });
 
+const POINTS_WIN = 3;
+const POINTS_DRAW = 1;
+
+// 7-30-2: 내전 목록의 "전체 순위 보기" 버튼에서 연결되는 연도별(또는 전체) 전체 플레이어 순위.
+// 리그 순위표(scores.computeStandings)와 동일하게 승점 → 득실 → 다득점 → 승수 순으로 정렬.
+export const getInnerwarYearlyStandings = query({
+  args: { year: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+
+    const all = await ctx.db.query("innerwars").take(500);
+    const innerwars = all.filter((w) => !w.deletedAt);
+    const availableYears = Array.from(new Set(innerwars.map((w) => w.year))).sort((a, b) => b - a);
+
+    const relevantInnerwarIds = new Set(
+      innerwars.filter((w) => args.year === undefined || w.year === args.year).map((w) => w._id)
+    );
+
+    const allMatches = await ctx.db.query("innerwarMatches").take(5000);
+    const relevantMatches = allMatches.filter(
+      (m) => m.status === "done" && relevantInnerwarIds.has(m.innerwarId)
+    );
+
+    type Entry = {
+      userId: Id<"users">;
+      games: number;
+      wins: number;
+      draws: number;
+      losses: number;
+      goalsFor: number;
+      goalsAgainst: number;
+    };
+    const statsMap = new Map<string, Entry>();
+    function entryFor(userId: Id<"users">): Entry {
+      let e = statsMap.get(userId);
+      if (!e) {
+        e = { userId, games: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 };
+        statsMap.set(userId, e);
+      }
+      return e;
+    }
+    function apply(e: Entry, myGoals: number, oppGoals: number) {
+      e.games++;
+      e.goalsFor += myGoals;
+      e.goalsAgainst += oppGoals;
+      if (myGoals > oppGoals) e.wins++;
+      else if (myGoals < oppGoals) e.losses++;
+      else e.draws++;
+    }
+
+    for (const m of relevantMatches) {
+      const scoreA = m.scoreA ?? 0;
+      const scoreB = m.scoreB ?? 0;
+      apply(entryFor(m.playerAId), scoreA, scoreB);
+      apply(entryFor(m.playerBId), scoreB, scoreA);
+    }
+
+    const standings = await Promise.all(
+      Array.from(statsMap.values()).map(async (e) => {
+        const player = await ctx.db.get(e.userId);
+        const goalDiff = e.goalsFor - e.goalsAgainst;
+        const points = e.wins * POINTS_WIN + e.draws * POINTS_DRAW;
+        const winRate = e.games > 0 ? Math.round((e.wins / e.games) * 1000) / 10 : 0;
+        const lossRate = e.games > 0 ? Math.round((e.losses / e.games) * 1000) / 10 : 0;
+        return { ...e, user: player, goalDiff, points, winRate, lossRate };
+      })
+    );
+
+    standings.sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points;
+      if (b.goalDiff !== a.goalDiff) return b.goalDiff - a.goalDiff;
+      if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
+      return b.wins - a.wins;
+    });
+
+    return { availableYears, year: args.year ?? null, standings };
+  },
+});
+
 export const getDetail = query({
   args: { innerwarId: v.id("innerwars") },
   handler: async (ctx, args) => {

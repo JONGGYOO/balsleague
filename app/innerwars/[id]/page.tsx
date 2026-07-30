@@ -559,7 +559,7 @@ export default function InnerwarDetailPage() {
                   </button>
                 </div>
               )}
-              {!myParticipation && status !== "inProgress" && (
+              {!myParticipation && status !== "inProgress" && status !== "done" && (
                 <button
                   onClick={() => handleJoin()}
                   disabled={joining}

@@ -254,7 +254,7 @@ export default function InnerwarsPage() {
         ) : (
           <>
             {availableYears.length > 0 && (
-              <div className="mb-4">
+              <div className="mb-4 flex flex-wrap items-center gap-3">
                 <select
                   value={effectiveYear}
                   onChange={(e) => setSelectedYear(e.target.value)}
@@ -265,6 +265,12 @@ export default function InnerwarsPage() {
                     <option key={y} value={y}>{y}년</option>
                   ))}
                 </select>
+                <Link
+                  href={effectiveYear ? `/innerwars/ranking?year=${effectiveYear}` : "/innerwars/ranking"}
+                  className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
+                >
+                  {effectiveYear ? `${effectiveYear}년 전체 순위 보기` : "전체 순위 보기"}
+                </Link>
               </div>
             )}
             {filtered.length === 0 ? (
@@ -334,7 +340,7 @@ export default function InnerwarsPage() {
                             </button>
                           </div>
                         )}
-                        {!isApproved && w.status !== "inProgress" && (
+                        {!isApproved && w.status !== "inProgress" && w.status !== "done" && (
                           <button
                             onClick={() => handleJoin(w._id)}
                             disabled={isProcessing}

@@ -61,7 +61,11 @@ function StatRow({ stat }: { stat: StatLike }) {
             )}
           </div>
           <div className="flex justify-between text-xs text-gray-400 mt-1">
-            <span>승률 {Math.round((stat.wins / stat.games) * 100)}%</span>
+            <span>
+              <span className="text-green-600">승률 {Math.round((stat.wins / stat.games) * 100)}%</span>
+              <span className="mx-1">·</span>
+              <span className="text-red-500">패율 {Math.round((stat.losses / stat.games) * 100)}%</span>
+            </span>
             <span>{stat.goalsFor}득 {stat.goalsAgainst}실</span>
           </div>
         </div>
@@ -85,6 +89,8 @@ function VsStatRow({ vs }: { vs: VsStatLike }) {
         득실 {vs.goalDiff > 0 ? `+${vs.goalDiff}` : vs.goalDiff}
       </span>
       <span className="text-xs text-gray-400">{vs.goalsFor}득 {vs.goalsAgainst}실</span>
+      <span className="text-xs text-green-600">승률 {Math.round((vs.wins / vs.games) * 100)}%</span>
+      <span className="text-xs text-red-500">패율 {Math.round((vs.losses / vs.games) * 100)}%</span>
     </div>
   );
 }
