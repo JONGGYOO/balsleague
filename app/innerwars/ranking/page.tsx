@@ -76,15 +76,11 @@ function InnerwarRankingContent() {
                     <th className="px-4 py-3 text-center">승</th>
                     <th className="px-4 py-3 text-center">무</th>
                     <th className="px-4 py-3 text-center">패</th>
-                    <th className="px-4 py-3 text-center">득점</th>
-                    <th className="px-4 py-3 text-center">실점</th>
-                    <th className="px-4 py-3 text-center">득실</th>
                     <th className="px-4 py-3 text-center">승점</th>
                     <th className="px-4 py-3 text-center">참여</th>
                     <th className="px-4 py-3 text-center">팀승</th>
                     <th className="px-4 py-3 text-center">팀패</th>
-                    <th className="px-4 py-3 text-center">승률</th>
-                    <th className="px-4 py-3 text-center">패율</th>
+                    <th className="px-4 py-3 text-center">승패율</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -107,17 +103,15 @@ function InnerwarRankingContent() {
                         <td className="px-4 py-3 text-center font-semibold text-green-600">{entry.wins}</td>
                         <td className="px-4 py-3 text-center text-gray-500">{entry.draws}</td>
                         <td className="px-4 py-3 text-center text-red-500">{entry.losses}</td>
-                        <td className="px-4 py-3 text-center text-gray-600">{entry.goalsFor}</td>
-                        <td className="px-4 py-3 text-center text-gray-600">{entry.goalsAgainst}</td>
-                        <td className="px-4 py-3 text-center font-medium text-gray-700">
-                          {entry.goalDiff > 0 ? `+${entry.goalDiff}` : entry.goalDiff}
-                        </td>
                         <td className="px-4 py-3 text-center font-bold text-blue-700">{entry.points}</td>
                         <td className="px-4 py-3 text-center text-gray-600">{entry.innerwarsPlayed}</td>
                         <td className="px-4 py-3 text-center font-semibold text-green-600">{entry.innerwarWins}</td>
                         <td className="px-4 py-3 text-center text-red-500">{entry.innerwarLosses}</td>
-                        <td className="px-4 py-3 text-center text-green-600">{entry.winRate}%</td>
-                        <td className="px-4 py-3 text-center text-red-500">{entry.lossRate}%</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="text-green-600">{entry.winRate}%</span>
+                          <span className="text-gray-400">, </span>
+                          <span className="text-red-500">{entry.lossRate}%</span>
+                        </td>
                       </tr>
                     );
                   })}
