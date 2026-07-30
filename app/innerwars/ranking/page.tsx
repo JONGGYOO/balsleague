@@ -80,6 +80,9 @@ function InnerwarRankingContent() {
                     <th className="px-4 py-3 text-center">실점</th>
                     <th className="px-4 py-3 text-center">득실</th>
                     <th className="px-4 py-3 text-center">승점</th>
+                    <th className="px-4 py-3 text-center">참여</th>
+                    <th className="px-4 py-3 text-center">팀승</th>
+                    <th className="px-4 py-3 text-center">팀패</th>
                     <th className="px-4 py-3 text-center">승률</th>
                     <th className="px-4 py-3 text-center">패율</th>
                   </tr>
@@ -110,6 +113,9 @@ function InnerwarRankingContent() {
                           {entry.goalDiff > 0 ? `+${entry.goalDiff}` : entry.goalDiff}
                         </td>
                         <td className="px-4 py-3 text-center font-bold text-blue-700">{entry.points}</td>
+                        <td className="px-4 py-3 text-center text-gray-600">{entry.innerwarsPlayed}</td>
+                        <td className="px-4 py-3 text-center font-semibold text-green-600">{entry.innerwarWins}</td>
+                        <td className="px-4 py-3 text-center text-red-500">{entry.innerwarLosses}</td>
                         <td className="px-4 py-3 text-center text-green-600">{entry.winRate}%</td>
                         <td className="px-4 py-3 text-center text-red-500">{entry.lossRate}%</td>
                       </tr>

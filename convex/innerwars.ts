@@ -157,13 +157,22 @@ export const getInnerwarYearlyStandings = query({
         const team = teamStatsMap.get(e.userId);
         const innerwarsPlayed = team?.innerwarsPlayed ?? 0;
         const innerwarWins = team?.innerwarWins ?? 0;
+        const innerwarLosses = innerwarsPlayed - innerwarWins;
         const winRate =
           innerwarsPlayed > 0 ? Math.round((innerwarWins / innerwarsPlayed) * 1000) / 10 : 0;
         const lossRate =
-          innerwarsPlayed > 0
-            ? Math.round(((innerwarsPlayed - innerwarWins) / innerwarsPlayed) * 1000) / 10
-            : 0;
-        return { ...e, user: player, goalDiff, points, winRate, lossRate };
+          innerwarsPlayed > 0 ? Math.round((innerwarLosses / innerwarsPlayed) * 1000) / 10 : 0;
+        return {
+          ...e,
+          user: player,
+          goalDiff,
+          points,
+          innerwarsPlayed,
+          innerwarWins,
+          innerwarLosses,
+          winRate,
+          lossRate,
+        };
       })
     );
 
