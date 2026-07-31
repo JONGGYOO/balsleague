@@ -522,9 +522,6 @@ export default function LeagueDetailPage() {
                           </Link>
                           <WinBadge wins={entry.user?.leagueWins} />
                           {isMe && <span className="ml-1 text-xs text-blue-500">(나)</span>}
-                          {entry.user?.organization && (
-                            <span className="ml-1 text-xs text-gray-400">{entry.user.organization}</span>
-                          )}
                         </td>
                         <td className="px-4 py-3 text-center text-gray-600">{entry.games}</td>
                         <td className="px-4 py-3 text-center font-semibold text-green-600">{entry.wins}</td>
