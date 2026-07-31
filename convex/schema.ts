@@ -143,8 +143,9 @@ export default defineSchema({
     awayClanName: v.string(),
     status: v.optional(v.union(v.literal("draft"), v.literal("inProgress"), v.literal("done"))),
     // deathmatch(로스터 소진 방식)에서만 설정됨. normalMatch(고정 대진표)는
-    // 전체 승패 개념이 없어 항상 undefined.
-    winnerSide: v.optional(v.union(v.literal("home"), v.literal("away"))),
+    // 전체 승패 개념이 없어 항상 undefined. 마지막 경기가 동점이면 양쪽이 동시에
+    // 소진되므로 "draw"로 설정된다.
+    winnerSide: v.optional(v.union(v.literal("home"), v.literal("away"), v.literal("draw"))),
     currentIndexHome: v.optional(v.number()),
     currentIndexAway: v.optional(v.number()),
   }).index("by_year_month", ["year", "month"]),

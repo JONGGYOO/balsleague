@@ -364,13 +364,13 @@ export default function ClanwarDetailPage() {
         onClick={() => handleToggleLock(p._id)}
         disabled={lockingId === p._id}
         title={p.orderLocked ? "순번 고정 해제" : "현재 순번 고정"}
-        className={`text-xs px-2 py-1 rounded font-medium whitespace-nowrap disabled:opacity-50 ${
+        className={`w-6 h-6 flex items-center justify-center rounded text-xs disabled:opacity-50 ${
           p.orderLocked
             ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
-            : "border border-gray-300 text-gray-500 hover:bg-gray-50"
+            : "text-gray-400 hover:text-gray-700 hover:bg-gray-100"
         }`}
       >
-        {lockingId === p._id ? "..." : p.orderLocked ? "🔒 해제" : "고정"}
+        {lockingId === p._id ? "…" : p.orderLocked ? "🔒" : "🔓"}
       </button>
     );
   }
@@ -539,7 +539,7 @@ export default function ClanwarDetailPage() {
               <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4">
                 <p className="text-sm font-semibold text-amber-800">⚠️ 마지막 경기입니다</p>
                 <p className="text-xs text-amber-700 mt-1">
-                  양쪽 모두 마지막 참가자입니다. 동점은 허용되지 않습니다.
+                  양쪽 모두 마지막 참가자입니다. 이번 경기가 동점이면 클전이 무승부로 종료됩니다.
                 </p>
               </div>
             )}
@@ -601,11 +601,6 @@ export default function ClanwarDetailPage() {
                               />
                             </div>
                           </div>
-                          {isLastMatch && (
-                            <p className="text-xs text-amber-600 bg-amber-50 rounded px-3 py-2 mb-3 text-center">
-                              마지막 경기는 동점이 허용되지 않습니다
-                            </p>
-                          )}
                           <input
                             type="text"
                             value={broadcastUrl}
@@ -645,11 +640,9 @@ export default function ClanwarDetailPage() {
                               </div>
                             </div>
                             {activeMatch.scoreHome === activeMatch.scoreAway && (
-                              <div className={`text-center text-sm font-semibold mb-3 py-2 rounded-lg ${
-                                isLastMatch ? "text-red-600 bg-red-50" : "text-amber-600 bg-amber-50"
-                              }`}>
+                              <div className="text-center text-sm font-semibold mb-3 py-2 rounded-lg text-amber-600 bg-amber-50">
                                 {isLastMatch
-                                  ? "동점 확정 불가 — 연장 또는 승부차기로 재경기하세요"
+                                  ? "동점 — 확정 시 클전이 무승부로 종료됩니다"
                                   : "동점 — 확정 시 양쪽 모두 다음 참가자로 교체됩니다"}
                               </div>
                             )}
@@ -816,7 +809,7 @@ export default function ClanwarDetailPage() {
                 <div className="px-5 py-4 border-b border-gray-100">
                   <h3 className="text-sm font-semibold text-gray-800">팀 현황</h3>
                 </div>
-                <div className="px-5 py-4 grid grid-cols-2 gap-4">
+                <div className="px-5 py-4 space-y-5">
                   {renderRosterSide("home", home, clanwar.homeClanName, "text-blue-700")}
                   {renderRosterSide("away", away, clanwar.awayClanName, "text-red-700")}
                 </div>
@@ -828,11 +821,11 @@ export default function ClanwarDetailPage() {
         {/* ── done ── */}
         {status === "done" && (
           <div className={`rounded-xl px-6 py-8 text-center shadow-sm border ${
-            gameMode === "deathmatch"
-              ? clanwar.winnerSide === "home" ? "bg-blue-50 border-blue-200" : "bg-red-50 border-red-200"
+            gameMode === "deathmatch" && clanwar.winnerSide === "home" ? "bg-blue-50 border-blue-200"
+              : gameMode === "deathmatch" && clanwar.winnerSide === "away" ? "bg-red-50 border-red-200"
               : "bg-gray-50 border-gray-200"
           }`}>
-            {gameMode === "deathmatch" && clanwar.winnerSide ? (
+            {gameMode === "deathmatch" && (clanwar.winnerSide === "home" || clanwar.winnerSide === "away") ? (
               <>
                 <div className="text-5xl mb-3">🎉</div>
                 <h2 className={`text-2xl font-black mb-1 ${
@@ -841,6 +834,14 @@ export default function ClanwarDetailPage() {
                   {clanwar.winnerSide === "home" ? clanwar.homeClanName : clanwar.awayClanName} 승리!
                 </h2>
                 <p className="text-sm text-gray-500 mb-4">총 {completedMatches.length}경기</p>
+              </>
+            ) : gameMode === "deathmatch" && clanwar.winnerSide === "draw" ? (
+              <>
+                <div className="text-4xl mb-3">🤝</div>
+                <h2 className="text-xl font-black text-gray-800 mb-1">무승부</h2>
+                <p className="text-sm text-gray-500 mb-4">
+                  총 {completedMatches.length}경기 · 마지막 경기 동점으로 종료
+                </p>
               </>
             ) : (
               <>

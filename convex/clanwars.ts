@@ -527,18 +527,25 @@ export const confirmDeathmatchResult = mutation({
     const isDraw = match.scoreHome === match.scoreAway;
 
     if (isDraw) {
-      const isLastHome = currentIndexHome === home.length - 1;
-      const isLastAway = currentIndexAway === away.length - 1;
-      if (isLastHome && isLastAway) {
-        throw new Error("마지막 경기는 동점이 허용되지 않습니다. 연장 또는 승부차기로 결정해주세요.");
-      }
-
       await ctx.db.patch(args.matchId, { status: "done" });
 
       const nextHome = currentIndexHome + 1;
       const nextAway = currentIndexAway + 1;
 
-      if (nextHome >= home.length) {
+      const homeDone = nextHome >= home.length;
+      const awayDone = nextAway >= away.length;
+
+      if (homeDone && awayDone) {
+        // 양쪽 모두 마지막 참가자였던 경기가 동점 — 클전 전체를 무승부로 종료
+        await ctx.db.patch(match.clanwarId, {
+          status: "done",
+          winnerSide: "draw",
+          currentIndexHome: nextHome,
+          currentIndexAway: nextAway,
+        });
+        return;
+      }
+      if (homeDone) {
         await ctx.db.patch(match.clanwarId, {
           status: "done",
           winnerSide: "away",
@@ -547,7 +554,7 @@ export const confirmDeathmatchResult = mutation({
         });
         return;
       }
-      if (nextAway >= away.length) {
+      if (awayDone) {
         await ctx.db.patch(match.clanwarId, {
           status: "done",
           winnerSide: "home",
@@ -670,12 +677,6 @@ export const editLastDeathmatchResult = mutation({
     const isDraw = args.scoreHome === args.scoreAway;
 
     if (isDraw) {
-      const isLastHome = beforeIndexHome === home.length - 1;
-      const isLastAway = beforeIndexAway === away.length - 1;
-      if (isLastHome && isLastAway) {
-        throw new Error("마지막 경기는 동점이 허용되지 않습니다. 연장 또는 승부차기로 결정해주세요.");
-      }
-
       await ctx.db.replace(args.matchId, {
         clanwarId: match.clanwarId,
         homeParticipantId: match.homeParticipantId,
@@ -690,7 +691,19 @@ export const editLastDeathmatchResult = mutation({
       const nextHome = beforeIndexHome + 1;
       const nextAway = beforeIndexAway + 1;
 
-      if (nextHome >= home.length) {
+      const homeDone = nextHome >= home.length;
+      const awayDone = nextAway >= away.length;
+
+      if (homeDone && awayDone) {
+        await ctx.db.patch(match.clanwarId, {
+          status: "done",
+          winnerSide: "draw",
+          currentIndexHome: nextHome,
+          currentIndexAway: nextAway,
+        });
+        return;
+      }
+      if (homeDone) {
         await ctx.db.patch(match.clanwarId, {
           status: "done",
           winnerSide: "away",
@@ -699,7 +712,7 @@ export const editLastDeathmatchResult = mutation({
         });
         return;
       }
-      if (nextAway >= away.length) {
+      if (awayDone) {
         await ctx.db.patch(match.clanwarId, {
           status: "done",
           winnerSide: "home",
