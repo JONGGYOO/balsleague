@@ -33,9 +33,6 @@ function ParticipantName({ p }: { p: Participant }) {
         <span>{p.displayName}</span>
       )}
       {p.sourceType === "user" && <WinBadge wins={p.leagueWins} />}
-      {p.sourceType === "otherClanUser" && (
-        <span className="ml-1 text-xs font-normal text-gray-400">(타클랜)</span>
-      )}
     </>
   );
 }
