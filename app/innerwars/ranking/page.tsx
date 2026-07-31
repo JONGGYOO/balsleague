@@ -69,19 +69,13 @@ function InnerwarRankingContent() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-gray-50 text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    <th className="px-4 py-3 text-center w-8">순위</th>
-                    <th className="px-4 py-3 text-left">선수</th>
-                    <th className="px-4 py-3 text-center">경기</th>
-                    <th className="px-4 py-3 text-center">승</th>
-                    <th className="px-4 py-3 text-center">무</th>
-                    <th className="px-4 py-3 text-center">패</th>
-                    <th className="px-4 py-3 text-center">승점</th>
-                    <th className="px-4 py-3 text-center">참여</th>
-                    <th className="px-4 py-3 text-center">팀승</th>
-                    <th className="px-4 py-3 text-center">팀패</th>
-                    <th className="px-4 py-3 text-center">승패율</th>
-                    <th className="px-4 py-3 text-center">버스력</th>
+                  <tr className="bg-gray-50 text-xs font-medium text-gray-500">
+                    <th className="px-2 py-3 text-center w-8">순위</th>
+                    <th className="px-2 py-3 text-left">선수</th>
+                    <th className="px-2 py-3 text-center">개인전적</th>
+                    <th className="px-2 py-3 text-center">팀전적</th>
+                    <th className="px-2 py-3 text-center">승패율(%)</th>
+                    <th className="px-2 py-3 text-center">버스력(%)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -89,8 +83,8 @@ function InnerwarRankingContent() {
                     const isMe = entry.userId === currentUser?._id;
                     return (
                       <tr key={entry.userId} className={isMe ? "bg-blue-50" : "hover:bg-gray-50"}>
-                        <td className="px-4 py-3 text-center font-semibold text-gray-600">{idx + 1}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-2 py-3 text-center font-semibold text-gray-600">{idx + 1}</td>
+                        <td className="px-2 py-3">
                           <Link
                             href={`/players/${entry.userId}/innerwar`}
                             className={`font-medium hover:underline ${isMe ? "text-blue-700" : "text-gray-900"}`}
@@ -100,21 +94,29 @@ function InnerwarRankingContent() {
                           <WinBadge wins={entry.user?.leagueWins} />
                           {isMe && <span className="ml-1 text-xs text-blue-500">(나)</span>}
                         </td>
-                        <td className="px-4 py-3 text-center text-gray-600">{entry.games}</td>
-                        <td className="px-4 py-3 text-center font-semibold text-green-600">{entry.wins}</td>
-                        <td className="px-4 py-3 text-center text-gray-500">{entry.draws}</td>
-                        <td className="px-4 py-3 text-center text-red-500">{entry.losses}</td>
-                        <td className="px-4 py-3 text-center font-bold text-blue-700">{entry.points}</td>
-                        <td className="px-4 py-3 text-center text-gray-600">{entry.innerwarsPlayed}</td>
-                        <td className="px-4 py-3 text-center font-semibold text-green-600">{entry.innerwarWins}</td>
-                        <td className="px-4 py-3 text-center text-red-500">{entry.innerwarLosses}</td>
-                        <td className="px-4 py-3 text-center">
-                          <span className="text-green-600">{entry.winRate}%</span>
+                        <td className="px-2 py-3 text-center whitespace-nowrap">
+                          <div className="font-bold text-blue-700">{entry.points}점</div>
+                          <div className="mt-0.5 text-xs text-gray-500">
+                            <span className="text-green-600">{entry.wins}승</span>{" "}
+                            {entry.draws}무{" "}
+                            <span className="text-red-500">{entry.losses}패</span>
+                            <span className="text-gray-400"> · {entry.games}전</span>
+                          </div>
+                        </td>
+                        <td className="px-2 py-3 text-center whitespace-nowrap">
+                          <div className="font-semibold">
+                            <span className="text-green-600">{entry.innerwarWins}승</span>{" "}
+                            <span className="text-red-500">{entry.innerwarLosses}패</span>
+                          </div>
+                          <div className="mt-0.5 text-xs text-gray-400">{entry.innerwarsPlayed}참여</div>
+                        </td>
+                        <td className="px-2 py-3 text-center whitespace-nowrap">
+                          <span className="text-green-600">{entry.winRate}</span>
                           <span className="text-gray-400">, </span>
-                          <span className="text-red-500">{entry.lossRate}%</span>
+                          <span className="text-red-500">{entry.lossRate}</span>
                         </td>
                         <td
-                          className={`px-4 py-3 text-center font-semibold ${
+                          className={`px-2 py-3 text-center font-semibold whitespace-nowrap ${
                             entry.busPower > 0
                               ? "text-amber-600"
                               : entry.busPower < 0
@@ -122,7 +124,7 @@ function InnerwarRankingContent() {
                                 : "text-gray-400"
                           }`}
                         >
-                          {entry.busPower > 0 ? `+${entry.busPower}` : entry.busPower}%
+                          {entry.busPower > 0 ? `+${entry.busPower}` : entry.busPower}
                         </td>
                       </tr>
                     );

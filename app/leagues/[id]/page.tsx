@@ -253,7 +253,7 @@ export default function LeagueDetailPage() {
         <div className="flex items-center gap-3 ml-3 shrink-0">
           {isManager && (
             <Link href="/admin" className="text-sm font-medium text-indigo-600 hover:text-indigo-800">
-              관리자 패널
+              Admin
             </Link>
           )}
           {currentUser && (currentUser.nickname || currentUser.name) && (

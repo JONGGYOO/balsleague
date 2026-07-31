@@ -48,19 +48,20 @@ export default function AdminPage() {
           <Link href="/leagues" className="text-gray-500 hover:text-gray-800 text-sm font-medium">
             ← 목록
           </Link>
-          <h1 className="text-xl font-bold text-gray-900">관리자 패널</h1>
+          <h1 className="text-xl font-bold text-gray-900">Admin</h1>
           <span className="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
             {isSuperAdmin ? "슈퍼관리자" : "관리자"}
           </span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {currentUser && (currentUser.nickname || currentUser.name) && (
-            <span className="text-sm font-medium text-gray-700">
-              {currentUser.nickname && currentUser.name
-                ? `${currentUser.nickname}(${currentUser.name})`
-                : currentUser.nickname ?? currentUser.name}
+            <Link
+              href="/profile"
+              className="text-sm font-medium text-gray-700 hover:text-blue-600"
+            >
+              {currentUser.nickname ?? currentUser.name}
               <WinBadge wins={currentUser.leagueWins} />
-            </span>
+            </Link>
           )}
           <UserButton />
         </div>

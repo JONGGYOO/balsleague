@@ -202,19 +202,17 @@ export default function InnerwarsPage() {
               href="/admin"
               className="text-sm font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-lg"
             >
-              관리자 패널
+              Admin
             </Link>
           )}
-          <Link href="/profile" className="text-sm text-gray-500 hover:text-gray-800">
-            프로필
-          </Link>
           {currentUser && (currentUser.nickname || currentUser.name) && (
-            <span className="text-sm font-medium text-gray-700">
-              {currentUser.nickname && currentUser.name
-                ? `${currentUser.nickname}(${currentUser.name})`
-                : currentUser.nickname ?? currentUser.name}
+            <Link
+              href="/profile"
+              className="text-sm font-medium text-gray-700 hover:text-blue-600"
+            >
+              {currentUser.nickname ?? currentUser.name}
               <WinBadge wins={currentUser.leagueWins} />
-            </span>
+            </Link>
           )}
           <UserButton />
         </div>

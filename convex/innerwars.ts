@@ -158,15 +158,16 @@ export const getInnerwarYearlyStandings = query({
         const innerwarsPlayed = team?.innerwarsPlayed ?? 0;
         const innerwarWins = team?.innerwarWins ?? 0;
         const innerwarLosses = innerwarsPlayed - innerwarWins;
-        const winRate =
+        // 승패율은 반올림한 정수로 표시하고, 패율은 승률의 나머지(100-승률)로 맞춰 항상 합이 100이 되게 한다.
+        const winRatePrecise =
           innerwarsPlayed > 0 ? Math.round((innerwarWins / innerwarsPlayed) * 1000) / 10 : 0;
-        const lossRate =
-          innerwarsPlayed > 0 ? Math.round((innerwarLosses / innerwarsPlayed) * 1000) / 10 : 0;
+        const winRate = innerwarsPlayed > 0 ? Math.round(winRatePrecise) : 0;
+        const lossRate = innerwarsPlayed > 0 ? 100 - winRate : 0;
         // 버스력: 개인 실력(개인 경기 승률) 대비 팀 승률이 얼마나 높은지를 나타내는 지표.
         // 양수면 개인 기량보다 팀 승리를 더 많이 챙긴 것("버스를 탄" 정도), 음수면 그 반대.
         const skillWinRate = e.games > 0 ? Math.round((e.wins / e.games) * 1000) / 10 : 0;
         const busPower =
-          innerwarsPlayed > 0 ? Math.round((winRate - skillWinRate) * 10) / 10 : 0;
+          innerwarsPlayed > 0 ? Math.round((winRatePrecise - skillWinRate) * 10) / 10 : 0;
         return {
           ...e,
           user: player,

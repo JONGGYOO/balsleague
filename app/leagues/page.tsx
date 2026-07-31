@@ -173,19 +173,17 @@ export default function LeaguesPage() {
               href="/admin"
               className="text-sm font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-lg"
             >
-              관리자 패널
+              Admin
             </Link>
           )}
-          <Link href="/profile" className="text-sm text-gray-500 hover:text-gray-800">
-            프로필
-          </Link>
           {currentUser && (currentUser.nickname || currentUser.name) && (
-            <span className="text-sm font-medium text-gray-700">
-              {currentUser.nickname && currentUser.name
-                ? `${currentUser.nickname}(${currentUser.name})`
-                : currentUser.nickname ?? currentUser.name}
+            <Link
+              href="/profile"
+              className="text-sm font-medium text-gray-700 hover:text-blue-600"
+            >
+              {currentUser.nickname ?? currentUser.name}
               <WinBadge wins={currentUser.leagueWins} />
-            </span>
+            </Link>
           )}
           <UserButton />
         </div>
@@ -445,7 +443,7 @@ function LeagueLabel({ league }: { league: { year: number; month: number; name: 
   return (
     <>
       <span className="text-xs font-medium text-blue-600 bg-blue-50 rounded-full px-2 py-0.5 mr-2">
-        {league.year}년 {league.month}월
+        {league.year}.{String(league.month).padStart(2, "0")}
       </span>
       <span className="text-base font-semibold text-gray-900">{league.name}</span>
     </>
