@@ -128,4 +128,55 @@ export default defineSchema({
   })
     .index("by_innerwar", ["innerwarId"])
     .index("by_innerwar_and_index", ["innerwarId", "matchIndex"]),
+
+  // 클랜전: 타 클랜과의 공식 대결. 내전과 달리 참가자가 두 소스(등록 사용자 /
+  // 타클랜 등록 선수)에서 오고, 관리자가 로스터를 직접 구성한다 (자율 참가 없음).
+  clanwars: defineTable({
+    year: v.number(),
+    month: v.number(),
+    day: v.number(),
+    name: v.string(),
+    createdBy: v.string(),
+    deletedAt: v.optional(v.number()),
+    gameMode: v.union(v.literal("deathmatch"), v.literal("normalMatch")),
+    homeClanName: v.string(),
+    awayClanName: v.string(),
+    status: v.optional(v.union(v.literal("draft"), v.literal("inProgress"), v.literal("done"))),
+    // deathmatch(로스터 소진 방식)에서만 설정됨. normalMatch(고정 대진표)는
+    // 전체 승패 개념이 없어 항상 undefined.
+    winnerSide: v.optional(v.union(v.literal("home"), v.literal("away"))),
+    currentIndexHome: v.optional(v.number()),
+    currentIndexAway: v.optional(v.number()),
+  }).index("by_year_month", ["year", "month"]),
+
+  clanwarParticipants: defineTable({
+    clanwarId: v.id("clanwars"),
+    side: v.union(v.literal("home"), v.literal("away")),
+    sourceType: v.union(v.literal("user"), v.literal("otherClanUser")),
+    userId: v.optional(v.id("users")),
+    otherClanUserId: v.optional(v.id("otherClanUsers")),
+    teamOrder: v.optional(v.number()),
+    orderLocked: v.optional(v.boolean()),
+  })
+    .index("by_clanwar", ["clanwarId"]),
+
+  clanwarMatches: defineTable({
+    clanwarId: v.id("clanwars"),
+    // user/otherClanUser 두 소스를 통일하기 위해 raw id가 아니라
+    // clanwarParticipants row id를 참조한다.
+    homeParticipantId: v.id("clanwarParticipants"),
+    awayParticipantId: v.id("clanwarParticipants"),
+    matchIndex: v.number(),
+    status: v.optional(v.union(v.literal("pending"), v.literal("scored"), v.literal("done"))),
+    // 데스매치 전용
+    scoreHome: v.optional(v.number()),
+    scoreAway: v.optional(v.number()),
+    // 일반매치 전용 (점수 없이 결과만)
+    result: v.optional(v.union(v.literal("home"), v.literal("away"), v.literal("draw"))),
+    winnerParticipantId: v.optional(v.id("clanwarParticipants")),
+    // 방송 링크(주로 유튜브) — 점수/결과 저장 시 함께 입력, 전체 경기 결과에서 아이콘으로 노출
+    broadcastUrl: v.optional(v.string()),
+  })
+    .index("by_clanwar", ["clanwarId"])
+    .index("by_clanwar_and_index", ["clanwarId", "matchIndex"]),
 });

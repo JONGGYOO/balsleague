@@ -189,6 +189,12 @@ export default function InnerwarsPage() {
               내전
             </span>
             <Link
+              href="/clanwars"
+              className="text-sm font-medium text-gray-500 hover:text-gray-800 px-3 py-1 rounded-full hover:bg-gray-100"
+            >
+              클전
+            </Link>
+            <Link
               href="/awards"
               className="text-sm font-medium text-gray-500 hover:text-gray-800 px-3 py-1 rounded-full hover:bg-gray-100"
             >

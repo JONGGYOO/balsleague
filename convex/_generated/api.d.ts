@@ -9,6 +9,7 @@
  */
 
 import type * as awards from "../awards.js";
+import type * as clanwars from "../clanwars.js";
 import type * as innerwars from "../innerwars.js";
 import type * as leagues from "../leagues.js";
 import type * as organizations from "../organizations.js";
@@ -25,6 +26,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   awards: typeof awards;
+  clanwars: typeof clanwars;
   innerwars: typeof innerwars;
   leagues: typeof leagues;
   organizations: typeof organizations;
