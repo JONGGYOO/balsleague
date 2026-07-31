@@ -1184,7 +1184,6 @@ export default function InnerwarDetailPage() {
                 <thead>
                   <tr className="bg-gray-50 text-xs font-medium text-gray-500 uppercase">
                     <th className="px-4 py-3 text-left">선수</th>
-                    <th className="px-4 py-3 text-center w-12">팀</th>
                     <th className="px-4 py-3 text-center w-12">승</th>
                     <th className="px-4 py-3 text-center w-12">무</th>
                     <th className="px-4 py-3 text-center w-12">패</th>
@@ -1199,9 +1198,7 @@ export default function InnerwarDetailPage() {
                         <Link href={`/players/${userId}/innerwar?innerwar=${innerwarId}`} className="hover:underline">
                           {s.name}
                         </Link>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
+                        <span className={`ml-1.5 text-xs font-bold px-1.5 py-0.5 rounded-full ${
                           s.team === "A" ? "bg-blue-100 text-blue-700" : "bg-red-100 text-red-700"
                         }`}>{s.team}</span>
                       </td>
