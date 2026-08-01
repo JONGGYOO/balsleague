@@ -858,6 +858,81 @@ export const submitNormalMatchResult = mutation({
   },
 });
 
+// 클전이 완전히 종료(status === "done")된 이후의 "기록 정정" 전용 — editLast*와 달리
+// 마지막 경기뿐 아니라 임의의 확정 경기를 대상으로 하며, 로스터 진행(currentIndex)이나
+// 다음 경기 재계산·클전 전체 승자(winnerSide)는 건드리지 않는다. 이미 끝난 대회의
+// 결과 자체를 다시 쓰는 게 아니라, 점수 오타 정정이나 방송 링크 추가만 지원하기 위함.
+export const editDoneDeathmatchScore = mutation({
+  args: {
+    matchId: v.id("clanwarMatches"),
+    scoreHome: v.number(),
+    scoreAway: v.number(),
+    broadcastUrl: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (args.scoreHome < 0 || args.scoreAway < 0) {
+      throw new Error("점수는 0 이상이어야 합니다.");
+    }
+    await assertManager(ctx);
+
+    const match = await ctx.db.get(args.matchId);
+    if (!match) throw new Error("경기를 찾을 수 없습니다.");
+    if (match.status !== "done") throw new Error("확정된 경기만 수정할 수 있습니다.");
+
+    const clanwar = await ctx.db.get(match.clanwarId);
+    if (!clanwar) throw new Error("클전을 찾을 수 없습니다.");
+    if (clanwar.gameMode !== "deathmatch") throw new Error("데스매치 클전이 아닙니다.");
+    if (clanwar.status !== "done") throw new Error("종료된 클전만 이 방식으로 수정할 수 있습니다.");
+
+    const isDraw = args.scoreHome === args.scoreAway;
+    const winnerParticipantId = isDraw
+      ? undefined
+      : args.scoreHome > args.scoreAway
+        ? match.homeParticipantId
+        : match.awayParticipantId;
+
+    await ctx.db.patch(args.matchId, {
+      scoreHome: args.scoreHome,
+      scoreAway: args.scoreAway,
+      winnerParticipantId,
+      broadcastUrl: args.broadcastUrl?.trim() || undefined,
+    });
+  },
+});
+
+export const editDoneNormalMatchResult = mutation({
+  args: {
+    matchId: v.id("clanwarMatches"),
+    result: v.union(v.literal("home"), v.literal("away"), v.literal("draw")),
+    broadcastUrl: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await assertManager(ctx);
+
+    const match = await ctx.db.get(args.matchId);
+    if (!match) throw new Error("경기를 찾을 수 없습니다.");
+    if (match.status !== "done") throw new Error("확정된 경기만 수정할 수 있습니다.");
+
+    const clanwar = await ctx.db.get(match.clanwarId);
+    if (!clanwar) throw new Error("클전을 찾을 수 없습니다.");
+    if (clanwar.gameMode !== "normalMatch") throw new Error("일반매치 클전이 아닙니다.");
+    if (clanwar.status !== "done") throw new Error("종료된 클전만 이 방식으로 수정할 수 있습니다.");
+
+    const winnerParticipantId =
+      args.result === "home"
+        ? match.homeParticipantId
+        : args.result === "away"
+          ? match.awayParticipantId
+          : undefined;
+
+    await ctx.db.patch(args.matchId, {
+      result: args.result,
+      winnerParticipantId,
+      broadcastUrl: args.broadcastUrl?.trim() || undefined,
+    });
+  },
+});
+
 // 일반매치는 결과가 바뀌어도(홈승↔무↔원정승) 다음 대진 참가자가 달라지지 않는다
 // (인덱스가 승패와 무관하게 항상 함께 전진하므로) — 그래서 데스매치의 수정과 달리
 // 다음 매치를 지우고 재계산할 필요 없이 이 매치의 결과 필드만 바꾸면 된다.
