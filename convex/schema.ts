@@ -187,6 +187,9 @@ export default defineSchema({
     name: v.string(),
     description: v.optional(v.string()),
     writePermission: v.union(v.literal("superAdmin"), v.literal("admin"), v.literal("user")),
+    // 익명 게시판: true면 작성자 닉네임을 다른 사용자에게 숨기고 "익명"으로 표시.
+    // 관리자와 글쓴이 본인에게는 계속 실제 이름이 보인다 (모니터링/본인 확인용).
+    isAnonymous: v.optional(v.boolean()),
     createdBy: v.string(),
     deletedAt: v.optional(v.number()),
   }),

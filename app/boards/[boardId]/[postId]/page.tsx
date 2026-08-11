@@ -13,6 +13,17 @@ function displayName(user: { name?: string; nickname?: string } | null | undefin
   return user.nickname ?? user.name ?? "이름 없음";
 }
 
+function authorLabel(
+  isAnonymous: boolean | undefined,
+  author: { name?: string; nickname?: string } | null | undefined,
+  isSelf: boolean
+): string {
+  if (!isAnonymous) return displayName(author);
+  if (isSelf) return "익명 (나)";
+  if (author) return `${displayName(author)} (관리자만 열람)`;
+  return "익명";
+}
+
 function formatDateTime(ts: number): string {
   const d = new Date(ts);
   const date = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
@@ -71,7 +82,7 @@ export default function BoardPostPage() {
     return <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-400">게시글을 찾을 수 없습니다.</div>;
   }
 
-  const { post, board, author, canEdit } = detail;
+  const { post, board, author, isSelf, canEdit } = detail;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -90,7 +101,7 @@ export default function BoardPostPage() {
             <>
               <h1 className="text-xl font-bold text-gray-900 mb-2">{post.title}</h1>
               <div className="flex items-center justify-between text-xs text-gray-400 mb-5 pb-4 border-b border-gray-100">
-                <span>{displayName(author)} · {formatDateTime(post._creationTime)}</span>
+                <span>{authorLabel(board.isAnonymous, author, isSelf)} · {formatDateTime(post._creationTime)}</span>
                 {canEdit && (
                   <div className="flex items-center gap-2">
                     <button onClick={startEdit} className="hover:text-blue-600 px-2 py-1 rounded hover:bg-blue-50">

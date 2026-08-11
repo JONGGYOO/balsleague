@@ -20,12 +20,14 @@ type FormState = {
   name: string;
   description: string;
   writePermission: WritePermission;
+  isAnonymous: boolean;
 };
 
 const defaultForm = (): FormState => ({
   name: "",
   description: "",
   writePermission: "user",
+  isAnonymous: false,
 });
 
 export default function BoardsPage() {
@@ -51,9 +53,20 @@ export default function BoardsPage() {
     setShowModal(true);
   }
 
-  function openEdit(b: { _id: Id<"boards">; name: string; description?: string; writePermission: WritePermission }) {
+  function openEdit(b: {
+    _id: Id<"boards">;
+    name: string;
+    description?: string;
+    writePermission: WritePermission;
+    isAnonymous?: boolean;
+  }) {
     setEditingId(b._id);
-    setForm({ name: b.name, description: b.description ?? "", writePermission: b.writePermission });
+    setForm({
+      name: b.name,
+      description: b.description ?? "",
+      writePermission: b.writePermission,
+      isAnonymous: b.isAnonymous ?? false,
+    });
     setFormError(null);
     setShowModal(true);
   }
@@ -75,6 +88,7 @@ export default function BoardsPage() {
         name: form.name,
         description: form.description.trim() || undefined,
         writePermission: form.writePermission,
+        isAnonymous: form.isAnonymous,
       };
       if (editingId) {
         await updateBoard({ id: editingId, ...payload });
@@ -184,9 +198,16 @@ export default function BoardsPage() {
                   {b.description && (
                     <p className="text-sm text-gray-500 mt-0.5 truncate">{b.description}</p>
                   )}
-                  <span className="inline-block text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full mt-1.5">
-                    작성 권한: {WRITE_PERMISSION_LABEL[b.writePermission]}
-                  </span>
+                  <div className="flex items-center gap-1.5 mt-1.5">
+                    <span className="inline-block text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
+                      작성 권한: {WRITE_PERMISSION_LABEL[b.writePermission]}
+                    </span>
+                    {b.isAnonymous && (
+                      <span className="inline-block text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                        🕶️ 익명
+                      </span>
+                    )}
+                  </div>
                 </Link>
 
                 {isManager && (
@@ -242,6 +263,22 @@ export default function BoardsPage() {
                   rows={2}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
+              </div>
+
+              <div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.isAnonymous}
+                    onChange={(e) => setForm({ ...form, isAnonymous: e.target.checked })}
+                    className="accent-blue-600"
+                  />
+                  <span className="text-sm font-medium text-gray-700">익명 게시판</span>
+                </label>
+                <p className="mt-1 text-xs text-gray-400">
+                  체크하면 글쓴이 닉네임 대신 &ldquo;익명&rdquo;으로 표시됩니다. 관리자와 글쓴이 본인에게는
+                  계속 실제 닉네임이 보입니다.
+                </p>
               </div>
 
               <div>

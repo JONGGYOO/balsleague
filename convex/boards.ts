@@ -74,10 +74,15 @@ export const getBoardDetail = query({
       .take(500);
     const posts = allPosts.filter((p) => !p.deletedAt);
 
+    // 익명 게시판이면 관리자/글쓴이 본인이 아닌 사용자에게는 실제 작성자 정보를
+    // 아예 내려보내지 않는다 (네트워크 응답으로 실명이 새는 것을 막기 위해 UI에서만
+    // 숨기지 않고 서버에서부터 차단).
     const postsWithAuthor = await Promise.all(
       posts.map(async (p) => {
-        const author = await ctx.db.get(p.authorId);
-        return { ...p, author };
+        const isSelf = !!currentUser && currentUser._id === p.authorId;
+        const canSeeAuthor = !board.isAnonymous || isManager || isSelf;
+        const author = canSeeAuthor ? await ctx.db.get(p.authorId) : null;
+        return { ...p, author, isSelf };
       })
     );
     postsWithAuthor.sort((a, b) => b._creationTime - a._creationTime);
@@ -105,8 +110,6 @@ export const getPost = query({
     const board = await ctx.db.get(post.boardId);
     if (!board || board.deletedAt) return null;
 
-    const author = await ctx.db.get(post.authorId);
-
     const role = await getEffectiveRole(ctx);
     const isManager = role === "superAdmin" || role === "admin";
 
@@ -117,10 +120,15 @@ export const getPost = query({
 
     const isAuthor = !!currentUser && currentUser._id === post.authorId;
 
+    // 익명 게시판이면 관리자/글쓴이 본인이 아닌 사용자에게는 실제 작성자 정보를 내려보내지 않는다.
+    const canSeeAuthor = !board.isAnonymous || isManager || isAuthor;
+    const author = canSeeAuthor ? await ctx.db.get(post.authorId) : null;
+
     return {
       post,
       board,
       author,
+      isSelf: isAuthor,
       canEdit: isManager || isAuthor,
     };
   },
@@ -131,6 +139,7 @@ export const createBoard = mutation({
     name: v.string(),
     description: v.optional(v.string()),
     writePermission: v.union(v.literal("superAdmin"), v.literal("admin"), v.literal("user")),
+    isAnonymous: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -144,6 +153,7 @@ export const createBoard = mutation({
       name,
       description: args.description?.trim() || undefined,
       writePermission: args.writePermission,
+      isAnonymous: args.isAnonymous ?? false,
       createdBy: identity.tokenIdentifier,
     });
   },
@@ -155,6 +165,7 @@ export const updateBoard = mutation({
     name: v.string(),
     description: v.optional(v.string()),
     writePermission: v.union(v.literal("superAdmin"), v.literal("admin"), v.literal("user")),
+    isAnonymous: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     await assertManager(ctx);
@@ -166,6 +177,7 @@ export const updateBoard = mutation({
       name,
       description: args.description?.trim() || undefined,
       writePermission: args.writePermission,
+      isAnonymous: args.isAnonymous ?? false,
     });
   },
 });

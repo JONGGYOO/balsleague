@@ -13,6 +13,17 @@ function displayName(user: { name?: string; nickname?: string } | null | undefin
   return user.nickname ?? user.name ?? "이름 없음";
 }
 
+function authorLabel(
+  isAnonymous: boolean | undefined,
+  author: { name?: string; nickname?: string } | null | undefined,
+  isSelf: boolean
+): string {
+  if (!isAnonymous) return displayName(author);
+  if (isSelf) return "익명 (나)";
+  if (author) return `${displayName(author)} (관리자만 열람)`;
+  return "익명";
+}
+
 function formatDate(ts: number): string {
   const d = new Date(ts);
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
@@ -141,7 +152,7 @@ export default function BoardDetailPage() {
                 >
                   <span className="font-medium text-gray-900 truncate">{p.title}</span>
                   <span className="text-xs text-gray-400 shrink-0">
-                    {displayName(p.author)} · {formatDate(p._creationTime)}
+                    {authorLabel(board.isAnonymous, p.author, p.isSelf)} · {formatDate(p._creationTime)}
                   </span>
                 </Link>
               </li>
