@@ -150,7 +150,12 @@ export default function BoardDetailPage() {
                   href={`/boards/${boardId}/${p._id}`}
                   className="flex items-center justify-between gap-3 px-5 py-3 hover:bg-gray-50"
                 >
-                  <span className="font-medium text-gray-900 truncate">{p.title}</span>
+                  <span className="font-medium text-gray-900 truncate">
+                    {p.title}
+                    {p.commentCount > 0 && (
+                      <span className="ml-1 text-xs text-blue-500 font-semibold">[{p.commentCount}]</span>
+                    )}
+                  </span>
                   <span className="text-xs text-gray-400 shrink-0">
                     {authorLabel(board.isAnonymous, p.author, p.isSelf)} · {formatDate(p._creationTime)}
                   </span>

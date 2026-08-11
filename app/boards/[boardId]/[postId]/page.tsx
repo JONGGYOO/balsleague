@@ -40,12 +40,18 @@ export default function BoardPostPage() {
   const detail = useQuery(api.boards.getPost, { postId });
   const updatePost = useMutation(api.boards.updatePost);
   const removePost = useMutation(api.boards.removePost);
+  const addComment = useMutation(api.boards.addComment);
+  const removeComment = useMutation(api.boards.removeComment);
 
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [commentText, setCommentText] = useState("");
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const [commentError, setCommentError] = useState<string | null>(null);
 
   function startEdit() {
     if (!detail) return;
@@ -75,6 +81,26 @@ export default function BoardPostPage() {
     router.push(`/boards/${boardId}`);
   }
 
+  async function handleAddComment(e: React.FormEvent) {
+    e.preventDefault();
+    if (!commentText.trim()) return;
+    setCommentSubmitting(true);
+    setCommentError(null);
+    try {
+      await addComment({ postId, content: commentText });
+      setCommentText("");
+    } catch (err) {
+      setCommentError(err instanceof Error ? err.message : "오류가 발생했습니다.");
+    } finally {
+      setCommentSubmitting(false);
+    }
+  }
+
+  async function handleDeleteComment(commentId: Id<"boardComments">) {
+    if (!confirm("이 댓글을 삭제할까요?")) return;
+    await removeComment({ id: commentId });
+  }
+
   if (detail === undefined) {
     return <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-400">불러오는 중...</div>;
   }
@@ -82,7 +108,7 @@ export default function BoardPostPage() {
     return <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-400">게시글을 찾을 수 없습니다.</div>;
   }
 
-  const { post, board, author, isSelf, canEdit } = detail;
+  const { post, board, author, isSelf, canEdit, comments } = detail;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -147,6 +173,51 @@ export default function BoardPostPage() {
               </div>
             </div>
           )}
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mt-4">
+          <h2 className="text-sm font-semibold text-gray-800 mb-4">댓글 {comments.length}개</h2>
+
+          {comments.length > 0 && (
+            <ul className="space-y-3 mb-4">
+              {comments.map((c) => (
+                <li key={c._id} className="border-b border-gray-100 pb-3 last:border-b-0 last:pb-0">
+                  <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+                    <span>
+                      {authorLabel(board.isAnonymous, c.author, c.isSelf)} · {formatDateTime(c._creationTime)}
+                    </span>
+                    {c.canEdit && (
+                      <button
+                        onClick={() => handleDeleteComment(c._id)}
+                        className="hover:text-red-600 px-1.5 py-0.5 rounded hover:bg-red-50"
+                      >
+                        삭제
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap">{c.content}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <form onSubmit={handleAddComment} className="flex gap-2">
+            <input
+              type="text"
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              placeholder="댓글을 입력하세요"
+              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            />
+            <button
+              type="submit"
+              disabled={commentSubmitting || !commentText.trim()}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              등록
+            </button>
+          </form>
+          {commentError && <p className="text-sm text-red-500 mt-2">{commentError}</p>}
         </div>
       </main>
     </div>

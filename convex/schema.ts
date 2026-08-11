@@ -190,6 +190,8 @@ export default defineSchema({
     // 익명 게시판: true면 작성자 닉네임을 다른 사용자에게 숨기고 "익명"으로 표시.
     // 관리자와 글쓴이 본인에게는 계속 실제 이름이 보인다 (모니터링/본인 확인용).
     isAnonymous: v.optional(v.boolean()),
+    // 공지사항 게시판: true면 게시판 목록 맨 위에 고정 노출. 여러 개면 만든 순서대로 정렬.
+    isNotice: v.optional(v.boolean()),
     createdBy: v.string(),
     deletedAt: v.optional(v.number()),
   }),
@@ -201,4 +203,11 @@ export default defineSchema({
     content: v.string(),
     deletedAt: v.optional(v.number()),
   }).index("by_board", ["boardId"]),
+
+  boardComments: defineTable({
+    postId: v.id("boardPosts"),
+    authorId: v.id("users"),
+    content: v.string(),
+    deletedAt: v.optional(v.number()),
+  }).index("by_post", ["postId"]),
 });

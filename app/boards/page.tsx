@@ -21,6 +21,7 @@ type FormState = {
   description: string;
   writePermission: WritePermission;
   isAnonymous: boolean;
+  isNotice: boolean;
 };
 
 const defaultForm = (): FormState => ({
@@ -28,6 +29,7 @@ const defaultForm = (): FormState => ({
   description: "",
   writePermission: "user",
   isAnonymous: false,
+  isNotice: false,
 });
 
 export default function BoardsPage() {
@@ -59,6 +61,7 @@ export default function BoardsPage() {
     description?: string;
     writePermission: WritePermission;
     isAnonymous?: boolean;
+    isNotice?: boolean;
   }) {
     setEditingId(b._id);
     setForm({
@@ -66,6 +69,7 @@ export default function BoardsPage() {
       description: b.description ?? "",
       writePermission: b.writePermission,
       isAnonymous: b.isAnonymous ?? false,
+      isNotice: b.isNotice ?? false,
     });
     setFormError(null);
     setShowModal(true);
@@ -89,6 +93,7 @@ export default function BoardsPage() {
         description: form.description.trim() || undefined,
         writePermission: form.writePermission,
         isAnonymous: form.isAnonymous,
+        isNotice: form.isNotice,
       };
       if (editingId) {
         await updateBoard({ id: editingId, ...payload });
@@ -192,6 +197,11 @@ export default function BoardsPage() {
               >
                 <Link href={`/boards/${b._id}`} className="flex-1 min-w-0 hover:opacity-70 transition-opacity">
                   <div className="flex items-center gap-2">
+                    {b.isNotice && (
+                      <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full shrink-0">
+                        📌 공지
+                      </span>
+                    )}
                     <span className="text-base font-semibold text-gray-900">{b.name}</span>
                     <span className="text-xs text-gray-400">게시글 {b.postCount}개</span>
                   </div>
@@ -278,6 +288,22 @@ export default function BoardsPage() {
                 <p className="mt-1 text-xs text-gray-400">
                   체크하면 글쓴이 닉네임 대신 &ldquo;익명&rdquo;으로 표시됩니다. 관리자와 글쓴이 본인에게는
                   계속 실제 닉네임이 보입니다.
+                </p>
+              </div>
+
+              <div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.isNotice}
+                    onChange={(e) => setForm({ ...form, isNotice: e.target.checked })}
+                    className="accent-blue-600"
+                  />
+                  <span className="text-sm font-medium text-gray-700">📌 공지사항 게시판</span>
+                </label>
+                <p className="mt-1 text-xs text-gray-400">
+                  체크하면 이 게시판이 목록 맨 위에 고정됩니다. 공지사항 게시판이 여러 개면 만든
+                  순서대로 정렬됩니다.
                 </p>
               </div>
 

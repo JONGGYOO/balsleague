@@ -33,6 +33,12 @@ export const listBoards = query({
     const all = await ctx.db.query("boards").take(200);
     const boards = all.filter((b) => !b.deletedAt);
 
+    // 공지사항 게시판은 항상 맨 위, 여러 개면 만든 순서(오래된 순)대로. 나머지는 그 뒤에
+    // 마찬가지로 만든 순서대로.
+    const notices = boards.filter((b) => b.isNotice).sort((a, b) => a._creationTime - b._creationTime);
+    const normal = boards.filter((b) => !b.isNotice).sort((a, b) => a._creationTime - b._creationTime);
+    const sortedBoards = [...notices, ...normal];
+
     const allPosts = await ctx.db.query("boardPosts").take(5000);
     const postCountMap = new Map<string, number>();
     for (const p of allPosts) {
@@ -42,7 +48,7 @@ export const listBoards = query({
 
     return {
       effectiveRole: role,
-      boards: boards.map((b) => ({
+      boards: sortedBoards.map((b) => ({
         ...b,
         postCount: postCountMap.get(b._id) ?? 0,
         canWrite: canWrite(role, b.writePermission),
@@ -74,6 +80,14 @@ export const getBoardDetail = query({
       .take(500);
     const posts = allPosts.filter((p) => !p.deletedAt);
 
+    const postIds = new Set(posts.map((p) => p._id));
+    const allComments = await ctx.db.query("boardComments").take(5000);
+    const commentCountMap = new Map<string, number>();
+    for (const c of allComments) {
+      if (c.deletedAt || !postIds.has(c.postId)) continue;
+      commentCountMap.set(c.postId, (commentCountMap.get(c.postId) ?? 0) + 1);
+    }
+
     // 익명 게시판이면 관리자/글쓴이 본인이 아닌 사용자에게는 실제 작성자 정보를
     // 아예 내려보내지 않는다 (네트워크 응답으로 실명이 새는 것을 막기 위해 UI에서만
     // 숨기지 않고 서버에서부터 차단).
@@ -82,7 +96,7 @@ export const getBoardDetail = query({
         const isSelf = !!currentUser && currentUser._id === p.authorId;
         const canSeeAuthor = !board.isAnonymous || isManager || isSelf;
         const author = canSeeAuthor ? await ctx.db.get(p.authorId) : null;
-        return { ...p, author, isSelf };
+        return { ...p, author, isSelf, commentCount: commentCountMap.get(p._id) ?? 0 };
       })
     );
     postsWithAuthor.sort((a, b) => b._creationTime - a._creationTime);
@@ -124,12 +138,34 @@ export const getPost = query({
     const canSeeAuthor = !board.isAnonymous || isManager || isAuthor;
     const author = canSeeAuthor ? await ctx.db.get(post.authorId) : null;
 
+    const allComments = await ctx.db
+      .query("boardComments")
+      .withIndex("by_post", (q) => q.eq("postId", args.postId))
+      .take(500);
+    const comments = allComments.filter((c) => !c.deletedAt);
+
+    const commentsWithAuthor = await Promise.all(
+      comments.map(async (c) => {
+        const isCommentSelf = !!currentUser && currentUser._id === c.authorId;
+        const canSeeCommentAuthor = !board.isAnonymous || isManager || isCommentSelf;
+        const commentAuthor = canSeeCommentAuthor ? await ctx.db.get(c.authorId) : null;
+        return {
+          ...c,
+          author: commentAuthor,
+          isSelf: isCommentSelf,
+          canEdit: isManager || isCommentSelf,
+        };
+      })
+    );
+    commentsWithAuthor.sort((a, b) => a._creationTime - b._creationTime);
+
     return {
       post,
       board,
       author,
       isSelf: isAuthor,
       canEdit: isManager || isAuthor,
+      comments: commentsWithAuthor,
     };
   },
 });
@@ -140,6 +176,7 @@ export const createBoard = mutation({
     description: v.optional(v.string()),
     writePermission: v.union(v.literal("superAdmin"), v.literal("admin"), v.literal("user")),
     isAnonymous: v.optional(v.boolean()),
+    isNotice: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -154,6 +191,7 @@ export const createBoard = mutation({
       description: args.description?.trim() || undefined,
       writePermission: args.writePermission,
       isAnonymous: args.isAnonymous ?? false,
+      isNotice: args.isNotice ?? false,
       createdBy: identity.tokenIdentifier,
     });
   },
@@ -166,6 +204,7 @@ export const updateBoard = mutation({
     description: v.optional(v.string()),
     writePermission: v.union(v.literal("superAdmin"), v.literal("admin"), v.literal("user")),
     isAnonymous: v.optional(v.boolean()),
+    isNotice: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     await assertManager(ctx);
@@ -178,6 +217,7 @@ export const updateBoard = mutation({
       description: args.description?.trim() || undefined,
       writePermission: args.writePermission,
       isAnonymous: args.isAnonymous ?? false,
+      isNotice: args.isNotice ?? false,
     });
   },
 });
@@ -272,6 +312,54 @@ export const removePost = mutation({
         .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
         .unique();
       if (!me || me._id !== post.authorId) {
+        throw new Error("작성자 또는 관리자만 삭제할 수 있습니다.");
+      }
+    }
+
+    await ctx.db.patch(args.id, { deletedAt: Date.now() });
+  },
+});
+
+// 댓글은 게시글 작성 권한과 무관하게, 로그인한 모든 사용자가 남길 수 있다.
+export const addComment = mutation({
+  args: {
+    postId: v.id("boardPosts"),
+    content: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await getOrCreateUser(ctx);
+
+    const post = await ctx.db.get(args.postId);
+    if (!post || post.deletedAt) throw new Error("게시글을 찾을 수 없습니다.");
+
+    const content = args.content.trim();
+    if (!content) throw new Error("댓글 내용을 입력해주세요.");
+
+    return await ctx.db.insert("boardComments", {
+      postId: args.postId,
+      authorId: user._id,
+      content,
+    });
+  },
+});
+
+export const removeComment = mutation({
+  args: { id: v.id("boardComments") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("인증되지 않은 사용자입니다.");
+
+    const comment = await ctx.db.get(args.id);
+    if (!comment || comment.deletedAt) throw new Error("댓글을 찾을 수 없습니다.");
+
+    const role = await getEffectiveRole(ctx);
+    const isManager = role === "superAdmin" || role === "admin";
+    if (!isManager) {
+      const me = await ctx.db
+        .query("users")
+        .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+        .unique();
+      if (!me || me._id !== comment.authorId) {
         throw new Error("작성자 또는 관리자만 삭제할 수 있습니다.");
       }
     }
