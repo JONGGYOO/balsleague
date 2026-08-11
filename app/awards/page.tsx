@@ -159,9 +159,6 @@ export default function AwardsPage() {
                           </Link>
                           <WinBadge wins={entry.user?.leagueWins} />
                           {isMe && <span className="ml-1 text-xs text-blue-500">(나)</span>}
-                          {entry.user?.organization && (
-                            <span className="ml-1 text-xs text-gray-400">{entry.user.organization}</span>
-                          )}
                         </td>
                         <td className="px-3 py-3 text-center text-xs text-gray-400 whitespace-nowrap">
                           리그 {entry.leagueGames}×{data.pointsPerLeagueGame} + 내전 {entry.innerwarParticipations}×
