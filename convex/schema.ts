@@ -180,4 +180,22 @@ export default defineSchema({
   })
     .index("by_clanwar", ["clanwarId"])
     .index("by_clanwar_and_index", ["clanwarId", "matchIndex"]),
+
+  // 게시판 종류 — 슈퍼관리자/관리자가 생성. writePermission으로 글쓰기 가능한 최소 등급을 정한다
+  // ("user"면 내전관리자를 포함한 모든 로그인 사용자가 글쓰기 가능. 읽기는 항상 전체 로그인 사용자 공개)
+  boards: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    writePermission: v.union(v.literal("superAdmin"), v.literal("admin"), v.literal("user")),
+    createdBy: v.string(),
+    deletedAt: v.optional(v.number()),
+  }),
+
+  boardPosts: defineTable({
+    boardId: v.id("boards"),
+    authorId: v.id("users"),
+    title: v.string(),
+    content: v.string(),
+    deletedAt: v.optional(v.number()),
+  }).index("by_board", ["boardId"]),
 });

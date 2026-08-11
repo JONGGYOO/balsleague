@@ -68,6 +68,12 @@ export default function AwardsPage() {
             <span className="text-sm font-semibold text-amber-600 bg-amber-50 px-3 py-1 rounded-full">
               Award
             </span>
+            <Link
+              href="/boards"
+              className="text-sm font-medium text-gray-500 hover:text-gray-800 px-3 py-1 rounded-full hover:bg-gray-100"
+            >
+              게시판
+            </Link>
           </nav>
         </div>
         <div className="flex items-center gap-3">
