@@ -86,6 +86,9 @@ export default function ClanwarDetailPage() {
   const submitNormalMatchResult = useMutation(api.clanwars.submitNormalMatchResult);
   const editLastNormalMatchResult = useMutation(api.clanwars.editLastNormalMatchResult);
 
+  const editDoneDeathmatchScore = useMutation(api.clanwars.editDoneDeathmatchScore);
+  const editDoneNormalMatchResult = useMutation(api.clanwars.editDoneNormalMatchResult);
+
   const [scoreHome, setScoreHome] = useState("0");
   const [scoreAway, setScoreAway] = useState("0");
   const [broadcastUrl, setBroadcastUrl] = useState("");
@@ -107,6 +110,14 @@ export default function ClanwarDetailPage() {
   const [editingPrevResult, setEditingPrevResult] = useState(false);
   const [prevResultBroadcastUrl, setPrevResultBroadcastUrl] = useState("");
   const [prevResultSaving, setPrevResultSaving] = useState(false);
+
+  // 클전 종료 이후: 임의의 확정 경기 점수/결과/방송 링크 정정 (마지막 경기 한정 아님)
+  const [editingMatchId, setEditingMatchId] = useState<Id<"clanwarMatches"> | null>(null);
+  const [editRowScoreHome, setEditRowScoreHome] = useState("0");
+  const [editRowScoreAway, setEditRowScoreAway] = useState("0");
+  const [editRowBroadcastUrl, setEditRowBroadcastUrl] = useState("");
+  const [editRowSaving, setEditRowSaving] = useState(false);
+  const [editRowError, setEditRowError] = useState<string | null>(null);
 
   const [reordering, setReordering] = useState<string | null>(null);
   const [lockingId, setLockingId] = useState<string | null>(null);
@@ -324,6 +335,58 @@ export default function ClanwarDetailPage() {
       alert(err instanceof Error ? err.message : "오류가 발생했습니다.");
     } finally {
       setPrevResultSaving(false);
+    }
+  }
+
+  // ── 클전 종료 이후: 임의 행 정정 ──
+  function startEditDoneRow(m: (typeof matches)[number]) {
+    setEditRowScoreHome(String(m.scoreHome ?? 0));
+    setEditRowScoreAway(String(m.scoreAway ?? 0));
+    setEditRowBroadcastUrl(m.broadcastUrl ?? "");
+    setEditRowError(null);
+    setEditingMatchId(m._id);
+  }
+
+  async function handleSaveDoneScore() {
+    if (!editingMatchId) return;
+    const sH = parseInt(editRowScoreHome, 10);
+    const sA = parseInt(editRowScoreAway, 10);
+    if (isNaN(sH) || isNaN(sA) || sH < 0 || sA < 0) {
+      setEditRowError("유효한 점수를 입력하세요.");
+      return;
+    }
+    setEditRowSaving(true);
+    setEditRowError(null);
+    try {
+      await editDoneDeathmatchScore({
+        matchId: editingMatchId,
+        scoreHome: sH,
+        scoreAway: sA,
+        broadcastUrl: editRowBroadcastUrl.trim() || undefined,
+      });
+      setEditingMatchId(null);
+    } catch (err) {
+      setEditRowError(err instanceof Error ? err.message : "오류가 발생했습니다.");
+    } finally {
+      setEditRowSaving(false);
+    }
+  }
+
+  async function handleSaveDoneResult(result: "home" | "away" | "draw") {
+    if (!editingMatchId) return;
+    setEditRowSaving(true);
+    setEditRowError(null);
+    try {
+      await editDoneNormalMatchResult({
+        matchId: editingMatchId,
+        result,
+        broadcastUrl: editRowBroadcastUrl.trim() || undefined,
+      });
+      setEditingMatchId(null);
+    } catch (err) {
+      setEditRowError(err instanceof Error ? err.message : "오류가 발생했습니다.");
+    } finally {
+      setEditRowSaving(false);
     }
   }
 
@@ -870,7 +933,16 @@ export default function ClanwarDetailPage() {
                 const awayWon = gameMode === "deathmatch" ? m.winnerParticipantId === m.awayParticipantId : m.result === "away";
                 const isDraw = !homeWon && !awayWon;
                 const isLastRow = idx === completedMatches.length - 1;
-                const isEditingThisRow = isLastRow && (gameMode === "deathmatch" ? editingPrev : editingPrevResult);
+                const canEditThisRow = status === "done" ? isManager : isLastRow && canEditLast;
+                const isEditingThisRow =
+                  status === "done"
+                    ? editingMatchId === m._id
+                    : isLastRow && (gameMode === "deathmatch" ? editingPrev : editingPrevResult);
+                const startEditRow = () => {
+                  if (status === "done") startEditDoneRow(m);
+                  else if (gameMode === "deathmatch") startEditPrev();
+                  else startEditPrevResult();
+                };
 
                 if (isEditingThisRow) {
                   return (
@@ -882,7 +954,76 @@ export default function ClanwarDetailPage() {
                         <span className="font-medium text-gray-700 truncate">{m.away && <ParticipantName p={m.away} />}</span>
                       </div>
 
-                      {gameMode === "deathmatch" ? (
+                      {status === "done" ? (
+                        gameMode === "deathmatch" ? (
+                          <>
+                            <div className="flex items-center gap-2 mb-3">
+                              <input
+                                type="number" min={0} value={editRowScoreHome}
+                                onChange={(e) => setEditRowScoreHome(e.target.value)}
+                                className="w-14 rounded-lg border border-gray-300 px-1 py-1.5 text-center text-sm font-bold outline-none focus:border-blue-500"
+                              />
+                              <span className="text-gray-400 font-bold">:</span>
+                              <input
+                                type="number" min={0} value={editRowScoreAway}
+                                onChange={(e) => setEditRowScoreAway(e.target.value)}
+                                className="w-14 rounded-lg border border-gray-300 px-1 py-1.5 text-center text-sm font-bold outline-none focus:border-blue-500"
+                              />
+                            </div>
+                            <input
+                              type="text"
+                              value={editRowBroadcastUrl}
+                              onChange={(e) => setEditRowBroadcastUrl(e.target.value)}
+                              placeholder="방송 링크 (선택, 예: 유튜브 URL)"
+                              className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm mb-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            />
+                            {editRowError && <p className="text-xs text-red-500 mb-2">{editRowError}</p>}
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => { setEditingMatchId(null); setEditRowError(null); }}
+                                className="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                              >취소</button>
+                              <button
+                                onClick={handleSaveDoneScore}
+                                disabled={editRowSaving}
+                                className="flex-1 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                              >{editRowSaving ? "저장 중..." : "저장"}</button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <input
+                              type="text"
+                              value={editRowBroadcastUrl}
+                              onChange={(e) => setEditRowBroadcastUrl(e.target.value)}
+                              placeholder="방송 링크 (선택, 예: 유튜브 URL) — 아래 버튼 클릭 시 함께 저장됩니다"
+                              className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm mb-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            />
+                            {editRowError && <p className="text-xs text-red-500 mb-2">{editRowError}</p>}
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleSaveDoneResult("home")}
+                                disabled={editRowSaving}
+                                className="flex-1 rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-600 hover:bg-blue-100 disabled:opacity-50"
+                              >홈 승</button>
+                              <button
+                                onClick={() => handleSaveDoneResult("draw")}
+                                disabled={editRowSaving}
+                                className="flex-1 rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-semibold text-gray-600 hover:bg-gray-200 disabled:opacity-50"
+                              >무</button>
+                              <button
+                                onClick={() => handleSaveDoneResult("away")}
+                                disabled={editRowSaving}
+                                className="flex-1 rounded-lg bg-red-50 px-3 py-1.5 text-sm font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50"
+                              >원정 승</button>
+                            </div>
+                            <button
+                              onClick={() => { setEditingMatchId(null); setEditRowError(null); }}
+                              className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                            >취소</button>
+                          </>
+                        )
+                      ) : gameMode === "deathmatch" ? (
                         <>
                           <div className="flex items-center gap-2 mb-3">
                             <input
@@ -979,9 +1120,9 @@ export default function ClanwarDetailPage() {
                         </span>
                       )}
                       <BroadcastLink url={m.broadcastUrl} />
-                      {isLastRow && canEditLast && (
+                      {canEditThisRow && (
                         <button
-                          onClick={gameMode === "deathmatch" ? startEditPrev : startEditPrevResult}
+                          onClick={startEditRow}
                           title="수정"
                           className="ml-0.5 w-6 h-6 flex items-center justify-center rounded text-gray-300 hover:text-blue-600 hover:bg-blue-50 text-xs"
                         >✎</button>
