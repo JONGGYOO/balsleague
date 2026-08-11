@@ -118,9 +118,11 @@ export default function AwardsPage() {
         {data && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-800">
             산출 근거: <strong>실제로 경기를 치른 달</strong> 기준으로, <strong>리그</strong> 경기 1경기당{" "}
-            {data.pointsPerLeagueGame}점, <strong>내전</strong> 경기 1경기당 {data.pointsPerInnerwarGame}점을
-            부여합니다(승패 무관, 참여 경기 수 기준). 예를 들어 6월 리그라도 실제 경기를 7월에 치렀다면 7월
-            집계에 포함됩니다. 전체 사용자를 대상으로 하며 경기 기록이 없으면 0점으로 표시됩니다.
+            {data.pointsPerLeagueGame}점, <strong>내전</strong> 참여 1회당 {data.pointsPerInnerwarParticipation}점,{" "}
+            <strong>클전</strong> 참여 1회당 {data.pointsPerClanwarParticipation}점을 부여합니다(승패 무관).
+            내전·클전은 치른 경기 수가 아니라 <strong>참여한 내전·클전의 개수</strong> 기준입니다. 예를 들어
+            6월 리그라도 실제 경기를 7월에 치렀다면 7월 집계에 포함됩니다. 전체 사용자를 대상으로 하며 참여
+            기록이 없으면 0점으로 표시됩니다.
           </div>
         )}
 
@@ -135,13 +137,11 @@ export default function AwardsPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-gray-50 text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    <th className="px-4 py-3 text-center w-10">순위</th>
-                    <th className="px-4 py-3 text-left">클랜원</th>
-                    <th className="px-4 py-3 text-center">리그 경기</th>
-                    <th className="px-4 py-3 text-center">내전 경기</th>
-                    <th className="px-4 py-3 text-center">산출근거</th>
-                    <th className="px-4 py-3 text-center">점수</th>
+                  <tr className="bg-gray-50 text-xs font-medium text-gray-500">
+                    <th className="px-3 py-3 text-center w-10">순위</th>
+                    <th className="px-3 py-3 text-left">클랜원</th>
+                    <th className="px-3 py-3 text-center">산출근거</th>
+                    <th className="px-3 py-3 text-center">점수</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -149,8 +149,8 @@ export default function AwardsPage() {
                     const isMe = entry.userId === currentUser?._id;
                     return (
                       <tr key={entry.userId} className={isMe ? "bg-blue-50" : "hover:bg-gray-50"}>
-                        <td className="px-4 py-3 text-center font-semibold text-gray-600">{idx + 1}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3 text-center font-semibold text-gray-600">{idx + 1}</td>
+                        <td className="px-3 py-3">
                           <Link
                             href={`/players/${entry.userId}`}
                             className={`font-medium hover:underline ${isMe ? "text-blue-700" : "text-gray-900"}`}
@@ -163,12 +163,12 @@ export default function AwardsPage() {
                             <span className="ml-1 text-xs text-gray-400">{entry.user.organization}</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-center text-gray-600">{entry.leagueGames}</td>
-                        <td className="px-4 py-3 text-center text-gray-600">{entry.innerwarGames}</td>
-                        <td className="px-4 py-3 text-center text-xs text-gray-400">
-                          {entry.leagueGames}×{data.pointsPerLeagueGame} + {entry.innerwarGames}×{data.pointsPerInnerwarGame}
+                        <td className="px-3 py-3 text-center text-xs text-gray-400 whitespace-nowrap">
+                          리그 {entry.leagueGames}×{data.pointsPerLeagueGame} + 내전 {entry.innerwarParticipations}×
+                          {data.pointsPerInnerwarParticipation} + 클전 {entry.clanwarParticipations}×
+                          {data.pointsPerClanwarParticipation}
                         </td>
-                        <td className="px-4 py-3 text-center font-bold text-amber-600">{entry.score}</td>
+                        <td className="px-3 py-3 text-center font-bold text-amber-600">{entry.score}</td>
                       </tr>
                     );
                   })}

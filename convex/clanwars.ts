@@ -40,7 +40,30 @@ export const getClanwarsPageData = query({
     const all = await ctx.db.query("clanwars").order("desc").take(200);
     const clanwars = all.filter((w) => !w.deletedAt);
 
-    return { user: { ...user, effectiveRole, email }, clanwars };
+    // 8-11-3: 일반매치는 clanwar.winnerSide가 없으므로(전체 승패 개념 없음) 목록에서
+    // "누가 이겼는지" 보여주기 위해 완료된 일반매치 클전의 개인전 결과를 집계해 전달한다.
+    const doneNormalMatchIds = new Set(
+      clanwars.filter((w) => w.status === "done" && w.gameMode === "normalMatch").map((w) => w._id)
+    );
+    const normalTallyMap = new Map<string, { homeWins: number; awayWins: number; draws: number }>();
+    if (doneNormalMatchIds.size > 0) {
+      const allMatches = await ctx.db.query("clanwarMatches").take(5000);
+      for (const m of allMatches) {
+        if (m.status !== "done" || !doneNormalMatchIds.has(m.clanwarId)) continue;
+        const t = normalTallyMap.get(m.clanwarId) ?? { homeWins: 0, awayWins: 0, draws: 0 };
+        if (m.result === "home") t.homeWins++;
+        else if (m.result === "away") t.awayWins++;
+        else t.draws++;
+        normalTallyMap.set(m.clanwarId, t);
+      }
+    }
+
+    const clanwarsWithResult = clanwars.map((w) => ({
+      ...w,
+      normalTally: normalTallyMap.get(w._id) ?? null,
+    }));
+
+    return { user: { ...user, effectiveRole, email }, clanwars: clanwarsWithResult };
   },
 });
 
@@ -273,13 +296,15 @@ export const removeParticipant = mutation({
   },
 });
 
+// 8-11-4: 순번 변경은 관리자뿐 아니라 로그인한 모든 사용자가 가능
 export const reorderParticipant = mutation({
   args: {
     participantId: v.id("clanwarParticipants"),
     direction: v.union(v.literal("up"), v.literal("down")),
   },
   handler: async (ctx, args) => {
-    await assertManager(ctx);
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("인증되지 않은 사용자입니다.");
 
     const participant = await ctx.db.get(args.participantId);
     if (!participant) throw new Error("참가자를 찾을 수 없습니다.");

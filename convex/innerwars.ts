@@ -48,6 +48,20 @@ export const getInnerwarsPageData = query({
     const all = await ctx.db.query("innerwars").order("desc").take(200);
     const innerwars = all.filter((w) => !w.deletedAt);
 
+    // 8-11-1: 내전 목록에 내전별 참가자 수 표시
+    const relevantIds = new Set(innerwars.map((w) => w._id));
+    const allParticipants = await ctx.db.query("innerwarParticipants").take(5000);
+    const participantCountMap = new Map<string, number>();
+    for (const p of allParticipants) {
+      if (!relevantIds.has(p.innerwarId)) continue;
+      if (p.status && p.status !== "approved") continue;
+      participantCountMap.set(p.innerwarId, (participantCountMap.get(p.innerwarId) ?? 0) + 1);
+    }
+    const innerwarsWithCount = innerwars.map((w) => ({
+      ...w,
+      participantCount: participantCountMap.get(w._id) ?? 0,
+    }));
+
     const participations = await ctx.db
       .query("innerwarParticipants")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
@@ -55,7 +69,7 @@ export const getInnerwarsPageData = query({
 
     return {
       user: { ...user, effectiveRole, email },
-      innerwars,
+      innerwars: innerwarsWithCount,
       participations,
     };
   },

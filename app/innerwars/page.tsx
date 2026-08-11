@@ -299,6 +299,10 @@ export default function InnerwarsPage() {
                           <InnerwarLabel innerwar={w} />
                         </Link>
                         <div className="flex items-center gap-2 mt-1">
+                          {/* 8-11-1: 내전별 참가자 수 표시 */}
+                          <span className="text-xs text-gray-400">
+                            참가자 {w.participantCount}명
+                          </span>
                           {/* 8-4: 내기 품목 표시 */}
                           {w.betItem && (
                             <span className="text-xs text-yellow-700 bg-yellow-50 px-2 py-0.5 rounded-full">

@@ -274,6 +274,30 @@ export default function ClanwarsPage() {
                             {STATUS_LABEL[w.status]}
                           </span>
                         )}
+                        {/* 8-11-3: 클랜전별 승자 표시 */}
+                        {w.status === "done" && w.gameMode === "deathmatch" && w.winnerSide && (
+                          <span
+                            className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                              w.winnerSide === "home"
+                                ? "text-blue-600 bg-blue-50"
+                                : w.winnerSide === "away"
+                                  ? "text-red-600 bg-red-50"
+                                  : "text-gray-500 bg-gray-100"
+                            }`}
+                          >
+                            {w.winnerSide === "home"
+                              ? `${w.homeClanName} 승`
+                              : w.winnerSide === "away"
+                                ? `${w.awayClanName} 승`
+                                : "무승부"}
+                          </span>
+                        )}
+                        {w.status === "done" && w.gameMode === "normalMatch" && w.normalTally && (
+                          <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                            {w.normalTally.homeWins} : {w.normalTally.awayWins}
+                            {w.normalTally.draws > 0 && ` (무 ${w.normalTally.draws})`}
+                          </span>
+                        )}
                       </div>
                     </div>
 

@@ -116,6 +116,7 @@ export default function ClanwarDetailPage() {
   const currentUser = detail?.currentUser ?? null;
   const effectiveRole = currentUser?.effectiveRole ?? "user";
   const isManager = effectiveRole === "superAdmin" || effectiveRole === "admin";
+  const isAuthenticated = !!currentUser;
 
   const clanwar = detail?.clanwar;
   const participants = useMemo(() => detail?.participants ?? [], [detail]);
@@ -327,7 +328,7 @@ export default function ClanwarDetailPage() {
   }
 
   function renderOrderButtons(p: Participant, idx: number, sideLength: number, minIdx = -1, activeScored = true) {
-    if (!isManager) return null;
+    if (!isAuthenticated) return null;
     const st = clanwar?.status ?? "draft";
     if (st === "done") return null;
     if (p.orderLocked) {
