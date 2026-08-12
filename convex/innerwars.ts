@@ -1507,6 +1507,39 @@ export const resetTeams = mutation({
   },
 });
 
+// 경기 시작 전 단계로 되돌리기 — 팀 배정/순번/고정은 그대로 두고 진행 상태(매치 기록,
+// 인덱스, 승자)만 지워서 teamAssigned로 되돌린다. 팀 배정 자체까지 지우는 resetTeams와
+// 달리, 로스터를 다시 짤 필요 없이 경기만 다시 시작하고 싶을 때 쓴다.
+export const resetToPreGame = mutation({
+  args: { innerwarId: v.id("innerwars") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("인증되지 않은 사용자입니다.");
+
+    const innerwar = await ctx.db.get(args.innerwarId);
+    if (!innerwar) throw new Error("내전을 찾을 수 없습니다.");
+    if (innerwar.status !== "inProgress" && innerwar.status !== "done") {
+      throw new Error("경기가 시작된 이후에만 되돌릴 수 있습니다.");
+    }
+
+    const role = await getEffectiveRole(ctx);
+    if (role !== "superAdmin" && role !== "admin") {
+      throw new Error("경기 시작 후에는 관리자만 되돌릴 수 있습니다.");
+    }
+
+    const existingMatches = await ctx.db
+      .query("innerwarMatches")
+      .withIndex("by_innerwar", (q) => q.eq("innerwarId", args.innerwarId))
+      .take(500);
+    for (const m of existingMatches) {
+      await ctx.db.delete(m._id);
+    }
+
+    const { winnerTeam: _w, currentIndexA: _a, currentIndexB: _b, ...rest } = innerwar;
+    await ctx.db.replace(args.innerwarId, { ...rest, status: "teamAssigned" });
+  },
+});
+
 // 9-1: 경기 진행 중, 아직 경기하지 않은 참가자를 슈퍼관리자/관리자가 제외
 export const removeUnplayedParticipant = mutation({
   args: { participantId: v.id("innerwarParticipants") },

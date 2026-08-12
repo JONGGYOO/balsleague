@@ -30,6 +30,7 @@ export default function InnerwarDetailPage() {
   const saveMatchScore = useMutation(api.innerwars.saveMatchScore);
   const confirmMatchResult = useMutation(api.innerwars.confirmMatchResult);
   const resetTeams = useMutation(api.innerwars.resetTeams);
+  const resetToPreGame = useMutation(api.innerwars.resetToPreGame);
   const removeUnplayedParticipant = useMutation(api.innerwars.removeUnplayedParticipant);
   const editLastMatch = useMutation(api.innerwars.editLastMatch);
   const toggleOrderLock = useMutation(api.innerwars.toggleOrderLock);
@@ -54,6 +55,7 @@ export default function InnerwarDetailPage() {
   const [lockingId, setLockingId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
+  const [resettingToPreGame, setResettingToPreGame] = useState(false);
   // 5-2: 전원 배정 완료 시 그리드 뷰 / 목록 뷰 전환
   const [showListView, setShowListView] = useState(false);
 
@@ -348,6 +350,23 @@ export default function InnerwarDetailPage() {
     }
   }
 
+  // 팀 배정/순번은 그대로 두고 경기 진행 상태만 지워 "경기 시작 전" 단계로 되돌린다
+  async function handleResetToPreGame() {
+    if (!isManager) {
+      alert("경기 시작 후에는 관리자만 되돌릴 수 있습니다.");
+      return;
+    }
+    if (!confirm("경기 진행 상태를 지우고, 팀 배정은 그대로 둔 채 경기 시작 전 단계로 되돌릴까요?")) return;
+    setResettingToPreGame(true);
+    try {
+      await resetToPreGame({ innerwarId });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "오류가 발생했습니다.");
+    } finally {
+      setResettingToPreGame(false);
+    }
+  }
+
   // 4-4: 모든 인증 사용자 순번 변경 가능
   // 8-2: 경기 시작 후에도 아직 경기하지 않은 선수는 순번 변경 가능.
   //      점수 저장 전(activeScored=false)이라면 현재 경기 중인 선수(minIdx)도 변경 가능,
@@ -415,15 +434,28 @@ export default function InnerwarDetailPage() {
   }
 
   // 5-1: 초기화 버튼 - 누구나 클릭 가능, 권한 없으면 handleReset에서 메시지 표시
-  function renderResetButton(_isGameStarted: boolean) {
+  // 경기 시작 후(isGameStarted)에는 "경기 시작 전으로" 버튼도 함께 노출 — 팀 배정은
+  // 유지한 채 진행 상태만 되돌리고 싶을 때 초기화(전체 초기화)보다 가볍게 쓸 수 있다.
+  function renderResetButton(isGameStarted: boolean) {
     return (
-      <button
-        onClick={handleReset}
-        disabled={resetting}
-        className="text-xs text-gray-500 hover:text-red-600 px-2 py-1 rounded hover:bg-red-50 disabled:opacity-50"
-      >
-        {resetting ? "초기화 중..." : "초기화"}
-      </button>
+      <div className="flex items-center gap-1">
+        {isGameStarted && (
+          <button
+            onClick={handleResetToPreGame}
+            disabled={resettingToPreGame}
+            className="text-xs text-gray-500 hover:text-blue-600 px-2 py-1 rounded hover:bg-blue-50 disabled:opacity-50"
+          >
+            {resettingToPreGame ? "되돌리는 중..." : "경기 시작 전으로"}
+          </button>
+        )}
+        <button
+          onClick={handleReset}
+          disabled={resetting}
+          className="text-xs text-gray-500 hover:text-red-600 px-2 py-1 rounded hover:bg-red-50 disabled:opacity-50"
+        >
+          {resetting ? "초기화 중..." : "초기화"}
+        </button>
+      </div>
     );
   }
 
