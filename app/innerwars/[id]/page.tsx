@@ -48,6 +48,8 @@ export default function InnerwarDetailPage() {
   const [prevError, setPrevError] = useState<string | null>(null);
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
+  const [wantsLeagueMatchChecked, setWantsLeagueMatchChecked] = useState(false);
+  const [joinModalTeam, setJoinModalTeam] = useState<"A" | "B" | "none" | null>(null);
   const [reordering, setReordering] = useState<string | null>(null);
   const [lockingId, setLockingId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -186,10 +188,26 @@ export default function InnerwarDetailPage() {
     return Object.entries(result).sort((a, b) => b[1].wins - a[1].wins);
   }, [completedMatches, approvedParticipants]);
 
-  async function handleJoin(team?: "A" | "B") {
+  async function handleJoin(team?: "A" | "B", wantsLeagueMatch?: boolean) {
     setJoining(true);
-    try { await joinInnerwar({ innerwarId, team }); }
+    try { await joinInnerwar({ innerwarId, team, wantsLeagueMatch }); }
     finally { setJoining(false); }
+  }
+
+  // 리그 적용 내전은 참가 신청 팝업에서 리그 적용 여부를 체크하게 하고, 아니면 바로 신청
+  function requestJoin(team?: "A" | "B") {
+    if (innerwar?.leagueApplicable) {
+      setWantsLeagueMatchChecked(false);
+      setJoinModalTeam(team ?? "none");
+    } else {
+      handleJoin(team);
+    }
+  }
+
+  async function confirmJoinModal() {
+    if (joinModalTeam === null) return;
+    await handleJoin(joinModalTeam === "none" ? undefined : joinModalTeam, wantsLeagueMatchChecked);
+    setJoinModalTeam(null);
   }
 
   async function handleLeave() {
@@ -544,14 +562,14 @@ export default function InnerwarDetailPage() {
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-gray-400">빈자리 참가</span>
                   <button
-                    onClick={() => handleJoin("A")}
+                    onClick={() => requestJoin("A")}
                     disabled={joining}
                     className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                   >
                     {joining ? "처리 중..." : "A팀 참가"}
                   </button>
                   <button
-                    onClick={() => handleJoin("B")}
+                    onClick={() => requestJoin("B")}
                     disabled={joining}
                     className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
                   >
@@ -561,7 +579,7 @@ export default function InnerwarDetailPage() {
               )}
               {!myParticipation && status !== "inProgress" && status !== "done" && (
                 <button
-                  onClick={() => handleJoin()}
+                  onClick={() => requestJoin()}
                   disabled={joining}
                   className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                 >
@@ -1158,6 +1176,14 @@ export default function InnerwarDetailPage() {
                       ) : (
                         <span className="text-xs font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">동반탈락</span>
                       )}
+                      {m.leagueReflected && (
+                        <span
+                          title="진행 중인 리그 성적에 반영된 경기입니다"
+                          className="text-xs font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded"
+                        >
+                          🏆 리그 성적 반영
+                        </span>
+                      )}
                       {isLastRow && canEditLastMatch && (
                         <button
                           onClick={startEditPrev}
@@ -1290,6 +1316,43 @@ export default function InnerwarDetailPage() {
           </p>
         )}
       </main>
+
+      {joinModalTeam !== null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={(e) => e.target === e.currentTarget && setJoinModalTeam(null)}
+        >
+          <div className="w-full max-w-sm mx-4 bg-white rounded-2xl shadow-xl p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">참가 신청</h3>
+            <label className="flex items-center gap-2 cursor-pointer mb-5">
+              <input
+                type="checkbox"
+                checked={wantsLeagueMatchChecked}
+                onChange={(e) => setWantsLeagueMatchChecked(e.target.checked)}
+                className="accent-blue-600"
+              />
+              <span className="text-sm text-gray-700">🏆 리그 적용 경기로 참가</span>
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setJoinModalTeam(null)}
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={confirmJoinModal}
+                disabled={joining}
+                className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {joining ? "처리 중..." : "참가 신청"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

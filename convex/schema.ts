@@ -88,11 +88,16 @@ export default defineSchema({
     // 팀 배정/초기화 권한: "admin"=관리자만, "all"=모든 사용자
     teamAssignPermission: v.optional(v.union(v.literal("admin"), v.literal("all"))),
     betItem: v.optional(v.string()),
+    // true면 참가자가 참가 신청 시 "리그 적용 경기"를 선택할 수 있고, 둘 다 선택한 경기는
+    // 종료 시 진행 중인 공통 리그의 정식 경기 기록(scores)으로 자동 반영된다.
+    leagueApplicable: v.optional(v.boolean()),
   }).index("by_year_month", ["year", "month"]),
 
   innerwarParticipants: defineTable({
     innerwarId: v.id("innerwars"),
     userId: v.id("users"),
+    // 참가 신청 시 "리그 적용 경기를 하시겠습니까?"에 대한 응답 (leagueApplicable 내전에서만 의미 있음)
+    wantsLeagueMatch: v.optional(v.boolean()),
     status: v.optional(v.union(v.literal("pending"), v.literal("approved"))),
     team: v.optional(v.union(v.literal("A"), v.literal("B"))),
     teamOrder: v.optional(v.number()),
@@ -125,6 +130,13 @@ export default defineSchema({
     winnerId: v.optional(v.id("users")),
     status: v.optional(v.union(v.literal("pending"), v.literal("scored"), v.literal("done"))),
     matchIndex: v.number(),
+    // 경기 종료 시 둘 다 리그 적용을 선택했고, 공통으로 참가 중인 진행 중 리그가 있으면 true.
+    // reflectedScoreId는 이 경기 때문에 새로 만들어진 scores row가 있을 때만 설정된다
+    // (둘 사이에 이미 그 리그 경기 기록이 있었다면 중복 등록하지 않고 reflectedScoreId 없이
+    // leagueReflected만 true로 표시한다 — 그 기존 기록은 이 내전 경기가 소유한 게 아니므로
+    // 이후 이 경기의 점수를 수정해도 건드리지 않는다).
+    leagueReflected: v.optional(v.boolean()),
+    reflectedScoreId: v.optional(v.id("scores")),
   })
     .index("by_innerwar", ["innerwarId"])
     .index("by_innerwar_and_index", ["innerwarId", "matchIndex"]),

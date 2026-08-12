@@ -22,6 +22,88 @@ async function checkTeamManagePermission(
   }
 }
 
+// 8-12-1: 리그 적용 내전 경기가 종료되면, 둘 다 리그 적용 경기를 선택했고 공통으로 참가 중인
+// 진행 중(종료되지 않은) 리그가 있을 경우 그 리그의 정식 경기 기록(scores)으로 자동 반영한다.
+// 이미 그 리그에서 둘이 붙은 기록이 있으면 중복 등록하지 않고 "반영됨" 표시만 한다 — 그 기존
+// 기록은 이 내전 경기가 만든 게 아니므로 reflectedScoreId 없이 leagueReflected만 true로 둔다.
+async function reflectToLeague(
+  ctx: MutationCtx,
+  innerwar: Doc<"innerwars">,
+  playerAId: Id<"users">,
+  playerBId: Id<"users">,
+  scoreA: number,
+  scoreB: number
+): Promise<{ leagueReflected: boolean; reflectedScoreId?: Id<"scores"> }> {
+  if (!innerwar.leagueApplicable) return { leagueReflected: false };
+
+  const [participantA, participantB] = await Promise.all([
+    ctx.db
+      .query("innerwarParticipants")
+      .withIndex("by_innerwar_and_user", (q) => q.eq("innerwarId", innerwar._id).eq("userId", playerAId))
+      .unique(),
+    ctx.db
+      .query("innerwarParticipants")
+      .withIndex("by_innerwar_and_user", (q) => q.eq("innerwarId", innerwar._id).eq("userId", playerBId))
+      .unique(),
+  ]);
+  if (!participantA?.wantsLeagueMatch || !participantB?.wantsLeagueMatch) {
+    return { leagueReflected: false };
+  }
+
+  const [leaguePartsA, leaguePartsB] = await Promise.all([
+    ctx.db.query("leagueParticipants").withIndex("by_user", (q) => q.eq("userId", playerAId)).take(500),
+    ctx.db.query("leagueParticipants").withIndex("by_user", (q) => q.eq("userId", playerBId)).take(500),
+  ]);
+  const approvedLeagueIdsA = new Set(
+    leaguePartsA.filter((p) => !p.status || p.status === "approved").map((p) => p.leagueId)
+  );
+  const commonLeagueIds = leaguePartsB
+    .filter((p) => (!p.status || p.status === "approved") && approvedLeagueIdsA.has(p.leagueId))
+    .map((p) => p.leagueId);
+  if (commonLeagueIds.length === 0) return { leagueReflected: false };
+
+  const commonLeagues = (await Promise.all(commonLeagueIds.map((id) => ctx.db.get(id)))).filter(
+    (l): l is Doc<"leagues"> => !!l && !l.deletedAt && l.status !== "ended"
+  );
+  if (commonLeagues.length === 0) return { leagueReflected: false };
+
+  // 진행 중인 공통 리그 중 가장 최근(연/월) 리그를 대상으로 한다
+  commonLeagues.sort((a, b) => (b.year !== a.year ? b.year - a.year : b.month - a.month));
+  const targetLeague = commonLeagues[0];
+
+  const leagueScores = await ctx.db
+    .query("scores")
+    .withIndex("by_league", (q) => q.eq("leagueId", targetLeague._id))
+    .take(2000);
+  const alreadyPlayed = leagueScores.some(
+    (s) =>
+      (s.homeUserId === playerAId && s.awayUserId === playerBId) ||
+      (s.homeUserId === playerBId && s.awayUserId === playerAId)
+  );
+  if (alreadyPlayed) return { leagueReflected: true };
+
+  const reflectedScoreId = await ctx.db.insert("scores", {
+    leagueId: targetLeague._id,
+    homeUserId: playerAId,
+    homeScore: scoreA,
+    awayUserId: playerBId,
+    awayScore: scoreB,
+  });
+  return { leagueReflected: true, reflectedScoreId };
+}
+
+// editLastMatch에서 점수만 바뀔 때, 이 경기가 직접 만든 리그 경기 기록(reflectedScoreId)이
+// 있으면 그 점수도 함께 갱신한다. 기존에 이미 있던(다른 경로로 생긴) 기록이었다면 손대지 않는다.
+async function syncReflectedScore(
+  ctx: MutationCtx,
+  match: Doc<"innerwarMatches">,
+  scoreA: number,
+  scoreB: number
+) {
+  if (!match.reflectedScoreId) return;
+  await ctx.db.patch(match.reflectedScoreId, { homeScore: scoreA, awayScore: scoreB });
+}
+
 export const getInnerwarsPageData = query({
   args: {},
   handler: async (ctx) => {
@@ -391,6 +473,7 @@ export const create = mutation({
     name: v.string(),
     teamAssignPermission: v.optional(v.union(v.literal("admin"), v.literal("all"))),
     betItem: v.optional(v.string()),
+    leagueApplicable: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -409,6 +492,7 @@ export const create = mutation({
       status: "draft",
       teamAssignPermission: args.teamAssignPermission ?? "admin",
       betItem: args.betItem,
+      leagueApplicable: args.leagueApplicable ?? false,
     });
   },
 });
@@ -422,6 +506,7 @@ export const update = mutation({
     name: v.string(),
     teamAssignPermission: v.optional(v.union(v.literal("admin"), v.literal("all"))),
     betItem: v.optional(v.string()),
+    leagueApplicable: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -430,7 +515,7 @@ export const update = mutation({
     if (role !== "superAdmin" && role !== "admin") throw new Error("권한이 없습니다.");
 
     const { id, ...fields } = args;
-    await ctx.db.patch(id, fields);
+    await ctx.db.patch(id, { ...fields, leagueApplicable: args.leagueApplicable ?? false });
   },
 });
 
@@ -470,6 +555,7 @@ export const join = mutation({
   args: {
     innerwarId: v.id("innerwars"),
     team: v.optional(v.union(v.literal("A"), v.literal("B"))),
+    wantsLeagueMatch: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const user = await getOrCreateUser(ctx);
@@ -484,6 +570,8 @@ export const join = mutation({
 
     const innerwar = await ctx.db.get(args.innerwarId);
     if (!innerwar || innerwar.deletedAt) throw new Error("내전을 찾을 수 없습니다.");
+
+    const wantsLeagueMatch = innerwar.leagueApplicable ? (args.wantsLeagueMatch ?? false) : undefined;
 
     if (args.team && (innerwar.status === "inProgress" || innerwar.status === "teamAssigned")) {
       const allInTeam = await ctx.db
@@ -500,6 +588,7 @@ export const join = mutation({
         status: "approved",
         team: args.team,
         teamOrder: maxOrder + 1,
+        wantsLeagueMatch,
       });
       return;
     }
@@ -508,6 +597,7 @@ export const join = mutation({
       innerwarId: args.innerwarId,
       userId: user._id,
       status: "approved",
+      wantsLeagueMatch,
     });
   },
 });
@@ -1117,7 +1207,10 @@ export const confirmMatchResult = mutation({
       }
 
       // 동반 탈락: 양 팀 모두 다음 선수로 진행
-      await ctx.db.patch(args.matchId, { status: "done" });
+      const drawReflection = await reflectToLeague(
+        ctx, innerwar, match.playerAId, match.playerBId, match.scoreA, match.scoreB
+      );
+      await ctx.db.patch(args.matchId, { status: "done", ...drawReflection });
 
       const nextA = currentIndexA + 1;
       const nextB = currentIndexB + 1;
@@ -1145,7 +1238,10 @@ export const confirmMatchResult = mutation({
     // 일반 승패 처리
     const isAWinner = match.scoreA > match.scoreB;
     const winnerId = isAWinner ? match.playerAId : match.playerBId;
-    await ctx.db.patch(args.matchId, { winnerId, status: "done" });
+    const decisiveReflection = await reflectToLeague(
+      ctx, innerwar, match.playerAId, match.playerBId, match.scoreA, match.scoreB
+    );
+    await ctx.db.patch(args.matchId, { winnerId, status: "done", ...decisiveReflection });
 
     let nextIndexA = currentIndexA;
     let nextIndexB = currentIndexB;
@@ -1249,6 +1345,7 @@ export const editLastMatch = mutation({
         throw new Error("마지막 경기는 동점이 허용되지 않습니다. 연장 또는 승부차기로 결정해주세요.");
       }
 
+      await syncReflectedScore(ctx, match, args.scoreA, args.scoreB);
       await ctx.db.replace(args.matchId, {
         innerwarId: match.innerwarId,
         playerAId: match.playerAId,
@@ -1257,6 +1354,8 @@ export const editLastMatch = mutation({
         scoreA: args.scoreA,
         scoreB: args.scoreB,
         status: "done",
+        leagueReflected: match.leagueReflected,
+        reflectedScoreId: match.reflectedScoreId,
       });
 
       const nextA = beforeIndexA + 1;
@@ -1300,6 +1399,7 @@ export const editLastMatch = mutation({
     // 일반 승패 처리
     const isAWinner = args.scoreA > args.scoreB;
     const winnerId = isAWinner ? match.playerAId : match.playerBId;
+    await syncReflectedScore(ctx, match, args.scoreA, args.scoreB);
     await ctx.db.patch(args.matchId, {
       scoreA: args.scoreA,
       scoreB: args.scoreB,

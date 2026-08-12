@@ -20,6 +20,7 @@ type FormState = {
   name: string;
   teamAssignPermission: "admin" | "all";
   betItem: string;
+  leagueApplicable: boolean;
 };
 
 const defaultForm = (): FormState => ({
@@ -29,6 +30,7 @@ const defaultForm = (): FormState => ({
   name: "발스내전",
   teamAssignPermission: "admin",
   betItem: "",
+  leagueApplicable: false,
 });
 
 const STATUS_LABEL: Record<string, string> = {
@@ -60,6 +62,8 @@ export default function InnerwarsPage() {
   const [form, setForm] = useState<FormState>(defaultForm());
   const [submitting, setSubmitting] = useState(false);
   const [joiningId, setJoiningId] = useState<string | null>(null);
+  const [joinModal, setJoinModal] = useState<{ innerwarId: Id<"innerwars">; team?: "A" | "B" } | null>(null);
+  const [joinModalChecked, setJoinModalChecked] = useState(false);
   const [selectedYear, setSelectedYear] = useState<string | null>(null);
 
   const currentUser = pageData?.user ?? null;
@@ -93,6 +97,7 @@ export default function InnerwarsPage() {
     name: string;
     teamAssignPermission?: "admin" | "all";
     betItem?: string;
+    leagueApplicable?: boolean;
   }) {
     setEditingId(w._id);
     setForm({
@@ -102,6 +107,7 @@ export default function InnerwarsPage() {
       name: w.name,
       teamAssignPermission: w.teamAssignPermission ?? "admin",
       betItem: w.betItem ?? "",
+      leagueApplicable: w.leagueApplicable ?? false,
     });
     setShowModal(true);
   }
@@ -137,13 +143,29 @@ export default function InnerwarsPage() {
     await removeInnerwar({ id });
   }
 
-  async function handleJoin(innerwarId: Id<"innerwars">, team?: "A" | "B") {
+  async function handleJoin(innerwarId: Id<"innerwars">, team?: "A" | "B", wantsLeagueMatch?: boolean) {
     setJoiningId(innerwarId);
     try {
-      await joinInnerwar({ innerwarId, team });
+      await joinInnerwar({ innerwarId, team, wantsLeagueMatch });
     } finally {
       setJoiningId(null);
     }
+  }
+
+  // 리그 적용 내전은 참가 신청 팝업에서 리그 적용 여부를 체크하게 하고, 아니면 바로 신청
+  function requestJoin(w: { _id: Id<"innerwars">; leagueApplicable?: boolean }, team?: "A" | "B") {
+    if (w.leagueApplicable) {
+      setJoinModalChecked(false);
+      setJoinModal({ innerwarId: w._id, team });
+    } else {
+      handleJoin(w._id, team);
+    }
+  }
+
+  async function confirmJoinModal() {
+    if (!joinModal) return;
+    await handleJoin(joinModal.innerwarId, joinModal.team, joinModalChecked);
+    setJoinModal(null);
   }
 
   async function handleLeave(innerwarId: Id<"innerwars">) {
@@ -331,6 +353,11 @@ export default function InnerwarsPage() {
                               전체 참여
                             </span>
                           )}
+                          {w.leagueApplicable && (
+                            <span className="text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+                              🏆 리그 적용
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -339,14 +366,14 @@ export default function InnerwarsPage() {
                         {!isApproved && w.status === "inProgress" && (
                           <div className="flex items-center gap-1">
                             <button
-                              onClick={() => handleJoin(w._id, "A")}
+                              onClick={() => requestJoin(w, "A")}
                               disabled={isProcessing}
                               className="rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                             >
                               A팀
                             </button>
                             <button
-                              onClick={() => handleJoin(w._id, "B")}
+                              onClick={() => requestJoin(w, "B")}
                               disabled={isProcessing}
                               className="rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
                             >
@@ -356,7 +383,7 @@ export default function InnerwarsPage() {
                         )}
                         {!isApproved && w.status !== "inProgress" && w.status !== "done" && (
                           <button
-                            onClick={() => handleJoin(w._id)}
+                            onClick={() => requestJoin(w)}
                             disabled={isProcessing}
                             className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                           >
@@ -460,6 +487,22 @@ export default function InnerwarsPage() {
               </div>
 
               <div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.leagueApplicable}
+                    onChange={(e) => setForm({ ...form, leagueApplicable: e.target.checked })}
+                    className="accent-blue-600"
+                  />
+                  <span className="text-sm font-medium text-gray-700">🏆 리그 적용 내전</span>
+                </label>
+                <p className="mt-1 text-xs text-gray-400">
+                  체크하면 참가 신청 시 &ldquo;리그 적용 경기&rdquo; 여부를 물어보고, 둘 다 선택한
+                  경기가 끝나면 진행 중인 공통 리그의 정식 경기 기록으로 자동 반영됩니다.
+                </p>
+              </div>
+
+              <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">내기품목</label>
                 <input
                   type="text"
@@ -520,6 +563,43 @@ export default function InnerwarsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {joinModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={(e) => e.target === e.currentTarget && setJoinModal(null)}
+        >
+          <div className="w-full max-w-sm mx-4 bg-white rounded-2xl shadow-xl p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">참가 신청</h3>
+            <label className="flex items-center gap-2 cursor-pointer mb-5">
+              <input
+                type="checkbox"
+                checked={joinModalChecked}
+                onChange={(e) => setJoinModalChecked(e.target.checked)}
+                className="accent-blue-600"
+              />
+              <span className="text-sm text-gray-700">🏆 리그 적용 경기로 참가</span>
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setJoinModal(null)}
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={confirmJoinModal}
+                disabled={joiningId === joinModal.innerwarId}
+                className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {joiningId === joinModal.innerwarId ? "처리 중..." : "참가 신청"}
+              </button>
+            </div>
           </div>
         </div>
       )}
