@@ -258,12 +258,13 @@ export default function LeagueDetailPage() {
             </Link>
           )}
           {currentUser && (currentUser.nickname || currentUser.name) && (
-            <span className="text-sm font-medium text-gray-700">
-              {currentUser.nickname && currentUser.name
-                ? `${currentUser.nickname}(${currentUser.name})`
-                : currentUser.nickname ?? currentUser.name}
+            <Link
+              href="/profile"
+              className="text-sm font-medium text-gray-700 hover:text-blue-600"
+            >
+              {currentUser.nickname ?? currentUser.name}
               <WinBadge wins={currentUser.leagueWins} />
-            </span>
+            </Link>
           )}
           <UserButton />
         </div>
