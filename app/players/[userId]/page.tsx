@@ -14,6 +14,39 @@ function displayName(user: { name?: string; nickname?: string } | null | undefin
   return user.nickname ?? user.name ?? "이름 없음";
 }
 
+// 순위표(InGameStamp)와 별개로, 프로필 헤더 옆에 붙는 인라인 배지 형태
+function LiveBadge() {
+  return (
+    <span className="ml-2 inline-flex items-center align-middle">
+      <style>{`
+        @keyframes in-game-pill-blink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0; }
+        }
+      `}</style>
+      <span
+        className="inline-flex items-center rounded-full border-[1.5px] border-red-600 px-2 py-0.5"
+        style={{ animation: "in-game-pill-blink 2.2s ease-in-out infinite" }}
+      >
+        <span className="bg-gradient-to-r from-red-700 to-red-300 bg-clip-text text-[0.65rem] font-extrabold tracking-wide text-transparent">
+          IN GAME
+        </span>
+      </span>
+    </span>
+  );
+}
+
+// 요일 표시 순서(월~일)와 실제 저장 값(0=일~6=토, JS Date getDay 기준) 매핑
+const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+const DAY_LABELS: Record<number, string> = {
+  0: "일", 1: "월", 2: "화", 3: "수", 4: "목", 5: "금", 6: "토",
+};
+
+function formatAvailMinute(minute: number): string {
+  const m = ((minute % 1440) + 1440) % 1440;
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+}
+
 function formatDate(ts: number): string {
   return new Date(ts).toLocaleDateString("ko-KR", {
     year: "numeric",
@@ -100,6 +133,7 @@ function PlayerStatsContent() {
 
   const currentUser = useQuery(api.users.getCurrentUser);
   const stats = useQuery(api.scores.getPlayerStats, { userId, leagueId });
+  const availability = useQuery(api.gameAvailability.getForUser, { userId });
   const leagueParticipants = useQuery(
     api.leagues.getParticipants,
     leagueId ? { leagueId } : "skip"
@@ -179,6 +213,7 @@ function PlayerStatsContent() {
                 {displayName(player)}
                 <WinBadge wins={player.leagueWins} />
                 {isMe && <span className="ml-1 text-sm font-normal text-blue-500">(나)</span>}
+                {availability?.inGame && <LiveBadge />}
               </h2>
               {player.nickname && player.name && (
                 <p className="text-sm text-gray-500">{player.name}</p>
@@ -188,6 +223,60 @@ function PlayerStatsContent() {
               )}
             </div>
           </div>
+        </div>
+
+        {/* 게임 가능 시간 */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-3 border-b border-gray-100">
+            <h3 className="text-sm font-semibold text-gray-700">🎮 게임 가능 시간</h3>
+          </div>
+          {availability === undefined ? (
+            <div className="px-5 py-6 text-center text-sm text-gray-400">불러오는 중...</div>
+          ) : (
+            <div className="px-5 py-4">
+              <div className="flex gap-1.5">
+                {DAY_ORDER.map((day) => {
+                  const enabled = !!availability?.schedule.find((s) => s.day === day)?.enabled;
+                  const isToday = day === new Date().getDay();
+                  return (
+                    <div
+                      key={day}
+                      className={`flex-1 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
+                        enabled ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-300"
+                      } ${isToday ? "ring-2 ring-blue-300 ring-offset-1" : ""}`}
+                    >
+                      {DAY_LABELS[day]}
+                    </div>
+                  );
+                })}
+              </div>
+              {!availability?.schedule.some((s) => s.enabled) ? (
+                <p className="text-sm text-gray-400 mt-3">아직 등록된 게임 가능 시간이 없습니다.</p>
+              ) : (
+                <div className="mt-3 space-y-1.5">
+                  {DAY_ORDER.filter(
+                    (day) => availability.schedule.find((s) => s.day === day)?.enabled
+                  ).map((day) => {
+                    const entry = availability.schedule.find((s) => s.day === day)!;
+                    const isToday = day === new Date().getDay();
+                    return (
+                      <div key={day} className="flex items-baseline gap-2 text-sm">
+                        <span className="w-4 font-bold text-blue-600 shrink-0">{DAY_LABELS[day]}</span>
+                        <span className="text-gray-700 font-medium">
+                          {formatAvailMinute(entry.startMinute)}~{formatAvailMinute(entry.endMinute)}
+                        </span>
+                        {isToday && (
+                          <span className="text-xs font-semibold text-blue-600 bg-blue-50 rounded-full px-2 py-0.5">
+                            오늘
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* 1. 현재 리그 통계 */}

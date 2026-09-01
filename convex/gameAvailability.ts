@@ -19,6 +19,60 @@ function defaultSchedule(): ScheduleEntry[] {
   return DAYS.map((day) => ({ day, enabled: false, startMinute: 20 * 60, endMinute: 23 * 60 }));
 }
 
+// 원클릭 "게임 중" 토글을 켜면 이 시간(ms) 동안만 유지되고 자동으로 꺼짐(깜빡 잊고 계속 켜두는 것 방지)
+const MANUAL_DURATION_MS = 3 * 60 * 60 * 1000;
+
+// 리그 상세 페이지 등에서 내 토글 버튼 상태를 표시할 때 사용
+export const getMyStatus = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return { manualActive: false };
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .unique();
+    if (!user) return { manualActive: false };
+
+    const existing = await ctx.db
+      .query("gameAvailability")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .unique();
+
+    return { manualActive: !!existing?.manualUntil && existing.manualUntil > Date.now() };
+  },
+});
+
+// 원클릭 "게임 중" 토글 — 꺼져 있으면 지금부터 MANUAL_DURATION_MS 동안 켜고, 켜져 있으면 즉시 끈다
+export const toggleManual = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getOrCreateUser(ctx);
+
+    const existing = await ctx.db
+      .query("gameAvailability")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .unique();
+
+    const currentlyActive = !!existing?.manualUntil && existing.manualUntil > Date.now();
+    const manualUntil = currentlyActive ? undefined : Date.now() + MANUAL_DURATION_MS;
+
+    if (existing) {
+      await ctx.db.patch(existing._id, { manualUntil, updatedAt: Date.now() });
+    } else {
+      await ctx.db.insert("gameAvailability", {
+        userId: user._id,
+        schedule: defaultSchedule(),
+        manualUntil,
+        updatedAt: Date.now(),
+      });
+    }
+
+    return { manualActive: !currentlyActive };
+  },
+});
+
 export const getMine = query({
   args: {},
   handler: async (ctx) => {
@@ -37,6 +91,26 @@ export const getMine = query({
       .unique();
 
     return existing?.schedule ?? defaultSchedule();
+  },
+});
+
+// 선수 상세 페이지 등에서 다른 사용자의 게임 가능 시간을 열람할 때 사용 (로그인한 사용자면 누구나 조회 가능)
+export const getForUser = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+
+    const doc = await ctx.db
+      .query("gameAvailability")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .unique();
+
+    const manualActive = !!doc?.manualUntil && doc.manualUntil > Date.now();
+    return {
+      schedule: doc?.schedule ?? defaultSchedule(),
+      inGame: manualActive || isInGameNow(doc?.schedule),
+    };
   },
 });
 
@@ -116,18 +190,22 @@ export function isInGameNow(schedule: ScheduleEntry[] | null | undefined): boole
 }
 
 // 여러 사용자의 "게임 중" 여부를 한 번에 계산 (순위표 등에서 재사용)
+// 요일별 예약 스케줄과 원클릭 수동 토글 중 하나라도 해당되면 게임 중으로 표시한다
 export async function computeInGameMap(
   ctx: Pick<QueryCtx | MutationCtx, "db">,
   userIds: Id<"users">[]
 ): Promise<Map<Id<"users">, boolean>> {
   const result = new Map<Id<"users">, boolean>();
+  const now = Date.now();
   await Promise.all(
     userIds.map(async (userId) => {
       const doc = await ctx.db
         .query("gameAvailability")
         .withIndex("by_user", (q) => q.eq("userId", userId))
         .unique();
-      result.set(userId, isInGameNow(doc?.schedule as ScheduleEntry[] | undefined));
+      const manualActive = !!doc?.manualUntil && doc.manualUntil > now;
+      const scheduled = isInGameNow(doc?.schedule as ScheduleEntry[] | undefined);
+      result.set(userId, manualActive || scheduled);
     })
   );
   return result;

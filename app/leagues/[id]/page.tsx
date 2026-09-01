@@ -26,11 +26,23 @@ export default function LeagueDetailPage() {
   const participants = useQuery(api.leagues.getParticipants, { leagueId });
   const standings = useQuery(api.scores.getStandings, { leagueId });
   const recentMatches = useQuery(api.scores.listByLeague, { leagueId });
+  const myGameStatus = useQuery(api.gameAvailability.getMyStatus);
 
   const addScore = useMutation(api.scores.add);
   const updateScore = useMutation(api.scores.updateScore);
   const deleteScore = useMutation(api.scores.remove);
   const endLeague = useMutation(api.leagues.endLeague);
+  const toggleManualInGame = useMutation(api.gameAvailability.toggleManual);
+  const [togglingGameStatus, setTogglingGameStatus] = useState(false);
+
+  async function handleToggleGameStatus() {
+    setTogglingGameStatus(true);
+    try {
+      await toggleManualInGame();
+    } finally {
+      setTogglingGameStatus(false);
+    }
+  }
 
   const effectiveRole = currentUser?.effectiveRole ?? "user";
   const isManager = effectiveRole === "superAdmin" || effectiveRole === "admin";
@@ -344,6 +356,42 @@ export default function LeagueDetailPage() {
             </div>
           )}
         </div>
+
+        {/* 게임 중 수동 토글 */}
+        {isApproved && (
+          <div
+            className={`bg-white rounded-xl border px-5 py-3.5 shadow-sm flex items-center justify-between gap-3 ${
+              myGameStatus?.manualActive ? "border-red-300" : "border-gray-200"
+            }`}
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="text-lg shrink-0">🎮</span>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gray-900">지금 게임 중이신가요?</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {myGameStatus?.manualActive
+                    ? "다시 누르면 꺼져요 (3시간 후 자동으로 꺼짐)"
+                    : "켜면 순위표에 IN GAME이 표시돼요"}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleToggleGameStatus}
+              disabled={togglingGameStatus || myGameStatus === undefined}
+              className={`shrink-0 inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-semibold border disabled:opacity-50 ${
+                myGameStatus?.manualActive
+                  ? "border-red-600 bg-red-50 text-red-700"
+                  : "border-gray-300 bg-gray-50 text-gray-500 hover:bg-gray-100"
+              }`}
+            >
+              {myGameStatus?.manualActive && (
+                <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse" />
+              )}
+              {myGameStatus?.manualActive ? "게임 중" : "게임 중 아님"}
+            </button>
+          </div>
+        )}
 
         {/* 스코어 입력 */}
         {canEnterScore && (
