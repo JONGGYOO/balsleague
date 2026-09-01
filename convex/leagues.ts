@@ -26,7 +26,15 @@ export const getLeaguesPageData = query({
           : "user";
 
     const all = await ctx.db.query("leagues").order("desc").take(200);
-    const leagues = all.filter((l) => !l.deletedAt);
+    const filtered = all.filter((l) => !l.deletedAt);
+
+    // 목록에서 종료된 리그의 우승자를 화려하게 보여주기 위해 닉네임까지 함께 내려준다
+    const leagues = await Promise.all(
+      filtered.map(async (l) => {
+        const winner = l.winnerUserId ? await ctx.db.get(l.winnerUserId) : null;
+        return { ...l, winner };
+      })
+    );
 
     const participations = await ctx.db
       .query("leagueParticipants")

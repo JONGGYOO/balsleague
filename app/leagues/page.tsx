@@ -268,12 +268,25 @@ export default function LeaguesPage() {
                   const isPending = status === "pending";
                   const canNavigate = isManager || isApproved;
                   const isProcessing = joiningId === league._id;
+                  const hasWinner = league.status === "ended" && !!league.winner;
 
                   return (
                     <li
                       key={league._id}
-                      className="bg-white rounded-xl border border-gray-200 px-5 py-4 flex items-center justify-between shadow-sm"
+                      className={`relative overflow-hidden rounded-xl border px-5 py-4 flex items-center justify-between shadow-sm ${
+                        hasWinner
+                          ? "bg-gradient-to-br from-amber-50 to-white border-amber-300 shadow-[0_10px_22px_-16px_rgba(180,83,9,0.55)]"
+                          : "bg-white border-gray-200"
+                      }`}
                     >
+                      {hasWinner && (
+                        <span
+                          className="absolute top-2.5 -right-9 w-32 rotate-[38deg] bg-gradient-to-r from-amber-700 via-amber-500 to-amber-700 text-center text-[9px] font-extrabold tracking-wider text-amber-50 py-0.5 shadow-sm"
+                          aria-hidden
+                        >
+                          WINNER
+                        </span>
+                      )}
                       <div className="flex-1 min-w-0">
                         {canNavigate ? (
                           <Link
@@ -284,6 +297,17 @@ export default function LeaguesPage() {
                           </Link>
                         ) : (
                           <LeagueLabel league={league} />
+                        )}
+                        {hasWinner && league.winner && (
+                          <div className="flex items-center gap-1.5 mt-1.5">
+                            <span className="text-base drop-shadow-sm">🏆</span>
+                            <span className="text-xs font-semibold text-amber-700">
+                              우승 <span aria-hidden>✨</span>
+                            </span>
+                            <span className="text-sm font-extrabold bg-gradient-to-r from-amber-700 via-amber-500 to-amber-600 bg-clip-text text-transparent">
+                              {league.winner.nickname ?? league.winner.name}
+                            </span>
+                          </div>
                         )}
                       </div>
 
