@@ -238,6 +238,8 @@ export default defineSchema({
     // 원클릭 "게임 중" 수동 토글 — 켜면 이 시각(ms)까지 자동으로 게임 중으로 표시되고,
     // 다시 누르면 즉시 꺼짐(undefined로 초기화)
     manualUntil: v.optional(v.number()),
+    // 게임 가능 시간에 대한 자유 코멘트 (예: "야근 있는 날은 취소될 수 있어요") — 선수 상세 페이지에 함께 노출
+    comment: v.optional(v.string()),
     updatedAt: v.number(),
   }).index("by_user", ["userId"]),
 });

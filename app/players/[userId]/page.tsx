@@ -190,12 +190,13 @@ function PlayerStatsContent() {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {currentUser && (currentUser.nickname || currentUser.name) && (
-            <span className="text-sm font-medium text-gray-700">
-              {currentUser.nickname && currentUser.name
-                ? `${currentUser.nickname}(${currentUser.name})`
-                : currentUser.nickname ?? currentUser.name}
+            <Link
+              href="/profile"
+              className="text-sm font-medium text-gray-700 hover:text-blue-600"
+            >
+              {currentUser.nickname ?? currentUser.name}
               <WinBadge wins={currentUser.leagueWins} />
-            </span>
+            </Link>
           )}
           <UserButton />
         </div>
@@ -274,6 +275,11 @@ function PlayerStatsContent() {
                     );
                   })}
                 </div>
+              )}
+              {availability?.comment && (
+                <p className="mt-3 pt-3 border-t border-gray-100 text-sm text-gray-600 whitespace-pre-wrap break-words">
+                  💬 {availability.comment}
+                </p>
               )}
             </div>
           )}

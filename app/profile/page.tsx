@@ -42,24 +42,26 @@ export default function ProfilePage() {
 
   const [tab, setTab] = useState<"info" | "schedule">("info");
 
-  const savedSchedule = useQuery(api.gameAvailability.getMine);
+  const savedAvailability = useQuery(api.gameAvailability.getMine);
   const saveSchedule = useMutation(api.gameAvailability.save);
   const [dayRows, setDayRows] = useState<DayRow[]>(defaultDayRows());
+  const [scheduleComment, setScheduleComment] = useState("");
   const [scheduleSaving, setScheduleSaving] = useState(false);
   const [scheduleSaved, setScheduleSaved] = useState(false);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!savedSchedule) return;
+    if (!savedAvailability) return;
     setDayRows(
       DAY_ORDER.map((day) => {
-        const found = savedSchedule.find((s) => s.day === day);
+        const found = savedAvailability.schedule.find((s) => s.day === day);
         if (!found) return { day, enabled: false, startMinute: 20 * 60, endMinute: 23 * 60 };
         // 서버에는 자정을 넘긴 종료 시간이 1440+ 로 저장되어 있을 수 있어, 입력창 표시용으로 되돌린다
         return { day, enabled: found.enabled, startMinute: found.startMinute, endMinute: found.endMinute % 1440 };
       })
     );
-  }, [savedSchedule]);
+    setScheduleComment(savedAvailability.comment ?? "");
+  }, [savedAvailability]);
 
   async function handleScheduleSave() {
     setScheduleSaving(true);
@@ -73,6 +75,7 @@ export default function ProfilePage() {
           // 종료 시간이 시작 시간보다 빠르거나 같으면 자정을 넘겨 다음날 새벽까지로 처리
           endMinute: row.endMinute <= row.startMinute ? row.endMinute + 1440 : row.endMinute,
         })),
+        comment: scheduleComment,
       });
       setScheduleSaved(true);
       setTimeout(() => setScheduleSaved(false), 2000);
@@ -250,6 +253,20 @@ export default function ProfilePage() {
                   />
                 </div>
               ))}
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                코멘트 <span className="text-xs font-normal text-gray-400">(선택, 최대 200자)</span>
+              </label>
+              <textarea
+                value={scheduleComment}
+                onChange={(e) => setScheduleComment(e.target.value.slice(0, 200))}
+                placeholder="예) 야근 있는 날은 취소될 수 있어요"
+                rows={2}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none"
+              />
+              <p className="mt-1 text-right text-xs text-gray-400">{scheduleComment.length}/200</p>
             </div>
 
             {scheduleError && <p className="text-xs text-red-500">{scheduleError}</p>}

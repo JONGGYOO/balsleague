@@ -73,6 +73,8 @@ export const toggleManual = mutation({
   },
 });
 
+const MAX_COMMENT_LENGTH = 200;
+
 export const getMine = query({
   args: {},
   handler: async (ctx) => {
@@ -83,14 +85,17 @@ export const getMine = query({
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
-    if (!user) return defaultSchedule();
+    if (!user) return { schedule: defaultSchedule(), comment: "" };
 
     const existing = await ctx.db
       .query("gameAvailability")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .unique();
 
-    return existing?.schedule ?? defaultSchedule();
+    return {
+      schedule: existing?.schedule ?? defaultSchedule(),
+      comment: existing?.comment ?? "",
+    };
   },
 });
 
@@ -109,6 +114,7 @@ export const getForUser = query({
     const manualActive = !!doc?.manualUntil && doc.manualUntil > Date.now();
     return {
       schedule: doc?.schedule ?? defaultSchedule(),
+      comment: doc?.comment ?? "",
       inGame: manualActive || isInGameNow(doc?.schedule),
     };
   },
@@ -124,6 +130,7 @@ export const save = mutation({
         endMinute: v.number(),
       })
     ),
+    comment: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await getOrCreateUser(ctx);
@@ -144,17 +151,20 @@ export const save = mutation({
       }
     }
 
+    const comment = args.comment?.trim().slice(0, MAX_COMMENT_LENGTH) ?? "";
+
     const existing = await ctx.db
       .query("gameAvailability")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .unique();
 
     if (existing) {
-      await ctx.db.patch(existing._id, { schedule: args.schedule, updatedAt: Date.now() });
+      await ctx.db.patch(existing._id, { schedule: args.schedule, comment, updatedAt: Date.now() });
     } else {
       await ctx.db.insert("gameAvailability", {
         userId: user._id,
         schedule: args.schedule,
+        comment,
         updatedAt: Date.now(),
       });
     }
