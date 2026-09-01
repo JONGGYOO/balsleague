@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { Id, Doc } from "./_generated/dataModel";
 import { QueryCtx, MutationCtx } from "./_generated/server";
 import { getOrCreateUser, getEffectiveRole } from "./utils";
+import { computeInGameMap } from "./gameAvailability";
 
 // 승점 규칙: 승 3점 · 무 1점 · 패 0점
 const POINTS_WIN = 3;
@@ -174,7 +175,9 @@ export const getStandings = query({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
 
-    return await computeStandings(ctx, args.leagueId);
+    const standings = await computeStandings(ctx, args.leagueId);
+    const inGameMap = await computeInGameMap(ctx, standings.map((s) => s.userId));
+    return standings.map((s) => ({ ...s, inGame: inGameMap.get(s.userId) ?? false }));
   },
 });
 

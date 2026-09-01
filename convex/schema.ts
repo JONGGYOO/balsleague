@@ -222,4 +222,19 @@ export default defineSchema({
     content: v.string(),
     deletedAt: v.optional(v.number()),
   }).index("by_post", ["postId"]),
+
+  // 프로필의 요일별 게임 가능 시간. 순위표에서 현재 시각 기준 "게임 중" 표시에 사용.
+  gameAvailability: defineTable({
+    userId: v.id("users"),
+    schedule: v.array(
+      v.object({
+        day: v.number(), // 0=일 1=월 2=화 3=수 4=목 5=금 6=토 (JS Date getUTCDay 기준, KST로 환산해서 계산)
+        enabled: v.boolean(),
+        startMinute: v.number(), // 0~1439
+        // startMinute보다 크며, 자정을 넘기면 1440을 더해 다음날 새벽 시간을 표현 (예: 새벽 1시 = 1500)
+        endMinute: v.number(),
+      })
+    ),
+    updatedAt: v.number(),
+  }).index("by_user", ["userId"]),
 });

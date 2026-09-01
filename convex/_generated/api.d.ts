@@ -11,6 +11,7 @@
 import type * as awards from "../awards.js";
 import type * as boards from "../boards.js";
 import type * as clanwars from "../clanwars.js";
+import type * as gameAvailability from "../gameAvailability.js";
 import type * as innerwars from "../innerwars.js";
 import type * as leagues from "../leagues.js";
 import type * as organizations from "../organizations.js";
@@ -29,6 +30,7 @@ declare const fullApi: ApiFromModules<{
   awards: typeof awards;
   boards: typeof boards;
   clanwars: typeof clanwars;
+  gameAvailability: typeof gameAvailability;
   innerwars: typeof innerwars;
   leagues: typeof leagues;
   organizations: typeof organizations;

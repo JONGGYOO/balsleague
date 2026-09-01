@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { WinBadge } from "@/app/components/WinBadge";
+import { InGameStamp } from "@/app/components/InGameStamp";
 
 function displayName(user: { name?: string; nickname?: string } | null | undefined): string {
   if (!user) return "알 수 없음";
@@ -514,12 +515,14 @@ export default function LeagueDetailPage() {
                       <tr key={entry.userId} className={isMe ? "bg-blue-50" : "hover:bg-gray-50"}>
                         <td className="px-2 py-3 text-center font-semibold text-gray-600">{idx + 1}</td>
                         <td className="px-2 py-3 whitespace-nowrap">
-                          <Link
-                            href={`/players/${entry.userId}?league=${leagueId}`}
-                            className={`font-medium hover:underline ${isMe ? "text-blue-700" : "text-gray-900"}`}
-                          >
-                            {displayName(entry.user)}
-                          </Link>
+                          <InGameStamp active={entry.inGame}>
+                            <Link
+                              href={`/players/${entry.userId}?league=${leagueId}`}
+                              className={`font-medium hover:underline ${isMe ? "text-blue-700" : "text-gray-900"}`}
+                            >
+                              {displayName(entry.user)}
+                            </Link>
+                          </InGameStamp>
                           <WinBadge wins={entry.user?.leagueWins} />
                           {isMe && <span className="ml-1 text-xs text-blue-500">(나)</span>}
                         </td>
