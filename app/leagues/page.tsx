@@ -309,6 +309,18 @@ export default function LeaguesPage() {
                             </span>
                           </div>
                         )}
+                        {league.status !== "ended" && league.currentLeader && (
+                          <div className="mt-1.5">
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-300 bg-gradient-to-br from-blue-50 to-cyan-50 px-2.5 py-1 shadow-[0_2px_6px_-2px_rgba(37,99,235,0.35)]">
+                              <span className="w-[5px] h-[5px] rounded-full bg-blue-600 animate-pulse shrink-0" />
+                              <span className="text-sm drop-shadow-sm">🥇</span>
+                              <span className="text-xs font-semibold text-blue-900/70">현재 1위</span>
+                              <span className="text-xs font-extrabold bg-gradient-to-r from-blue-700 to-cyan-600 bg-clip-text text-transparent">
+                                {league.currentLeader.nickname ?? league.currentLeader.name}
+                              </span>
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-2 ml-3 shrink-0">

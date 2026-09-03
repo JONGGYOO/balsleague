@@ -28,11 +28,17 @@ export const getLeaguesPageData = query({
     const all = await ctx.db.query("leagues").order("desc").take(200);
     const filtered = all.filter((l) => !l.deletedAt);
 
-    // 목록에서 종료된 리그의 우승자를 화려하게 보여주기 위해 닉네임까지 함께 내려준다
+    // 목록에서 종료된 리그의 우승자, 진행 중인 리그의 현재 1위를 함께 내려준다
     const leagues = await Promise.all(
       filtered.map(async (l) => {
-        const winner = l.winnerUserId ? await ctx.db.get(l.winnerUserId) : null;
-        return { ...l, winner };
+        if (l.status === "ended") {
+          const winner = l.winnerUserId ? await ctx.db.get(l.winnerUserId) : null;
+          return { ...l, winner, currentLeader: null };
+        }
+
+        const standings = await computeStandings(ctx, l._id);
+        const top = standings.find((s) => s.games > 0) ?? null;
+        return { ...l, winner: null, currentLeader: top?.user ?? null };
       })
     );
 
