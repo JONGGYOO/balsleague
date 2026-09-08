@@ -104,6 +104,74 @@ async function syncReflectedScore(
   await ctx.db.patch(match.reflectedScoreId, { homeScore: scoreA, awayScore: scoreB });
 }
 
+// 팀 승리 시 MVP 선정: 승리팀 선수 중 승 → 득실차 → 득점 순으로 비교해 1명을 뽑는다
+// (완전 동률이면 teamOrder가 앞선, 즉 먼저 뛴 선수를 우선). 리그 순위표(scores.computeStandings)와
+// 동일한 정렬 철학을 개인 단위로 적용한 것.
+type MvpStat = { wins: number; draws: number; losses: number; scored: number; conceded: number };
+
+function pickInnerwarMvp(
+  matches: { playerAId: Id<"users">; playerBId: Id<"users">; scoreA?: number; scoreB?: number; winnerId?: Id<"users">; status?: string }[],
+  participants: { userId: Id<"users">; team?: "A" | "B"; teamOrder?: number }[],
+  winnerTeam: "A" | "B"
+): { userId: Id<"users">; stat: MvpStat } | null {
+  const stats = new Map<string, MvpStat>();
+  function ensure(id: string): MvpStat {
+    let s = stats.get(id);
+    if (!s) {
+      s = { wins: 0, draws: 0, losses: 0, scored: 0, conceded: 0 };
+      stats.set(id, s);
+    }
+    return s;
+  }
+
+  for (const m of matches) {
+    if (m.status !== "done") continue;
+    const aId = m.playerAId as unknown as string;
+    const bId = m.playerBId as unknown as string;
+    const a = ensure(aId);
+    const b = ensure(bId);
+    a.scored += m.scoreA ?? 0;
+    a.conceded += m.scoreB ?? 0;
+    b.scored += m.scoreB ?? 0;
+    b.conceded += m.scoreA ?? 0;
+    if (m.winnerId === m.playerAId) {
+      a.wins++;
+      b.losses++;
+    } else if (m.winnerId === m.playerBId) {
+      b.wins++;
+      a.losses++;
+    } else {
+      a.draws++;
+      b.draws++;
+    }
+  }
+
+  const winningOrdered = participants
+    .filter((p) => p.team === winnerTeam)
+    .sort((a, b) => (a.teamOrder ?? 0) - (b.teamOrder ?? 0));
+
+  let best: { userId: Id<"users">; stat: MvpStat } | null = null;
+  for (const p of winningOrdered) {
+    const s = stats.get(p.userId as unknown as string);
+    if (!s) continue;
+    if (!best) {
+      best = { userId: p.userId, stat: s };
+      continue;
+    }
+    const diff = s.scored - s.conceded;
+    const bestDiff = best.stat.scored - best.stat.conceded;
+    if (
+      s.wins > best.stat.wins ||
+      (s.wins === best.stat.wins && diff > bestDiff) ||
+      (s.wins === best.stat.wins && diff === bestDiff && s.scored > best.stat.scored)
+    ) {
+      best = { userId: p.userId, stat: s };
+    }
+  }
+
+  return best;
+}
+
 export const getInnerwarsPageData = query({
   args: {},
   handler: async (ctx) => {
@@ -139,10 +207,24 @@ export const getInnerwarsPageData = query({
       if (p.status && p.status !== "approved") continue;
       participantCountMap.set(p.innerwarId, (participantCountMap.get(p.innerwarId) ?? 0) + 1);
     }
-    const innerwarsWithCount = innerwars.map((w) => ({
-      ...w,
-      participantCount: participantCountMap.get(w._id) ?? 0,
-    }));
+    // 종료되고 승리팀이 확정된 내전은 MVP를 함께 계산해 내려준다
+    const innerwarsWithCount = await Promise.all(
+      innerwars.map(async (w) => {
+        const base = { ...w, participantCount: participantCountMap.get(w._id) ?? 0, mvp: null as null | { userId: Id<"users">; user: Doc<"users"> | null } & MvpStat };
+        if (w.status !== "done" || !w.winnerTeam) return base;
+
+        const wMatches = await ctx.db
+          .query("innerwarMatches")
+          .withIndex("by_innerwar", (q) => q.eq("innerwarId", w._id))
+          .take(500);
+        const wParticipants = allParticipants.filter((p) => p.innerwarId === w._id);
+        const best = pickInnerwarMvp(wMatches, wParticipants, w.winnerTeam);
+        if (!best) return base;
+
+        const mvpUser = await ctx.db.get(best.userId);
+        return { ...base, mvp: { userId: best.userId, user: mvpUser, ...best.stat } };
+      })
+    );
 
     const participations = await ctx.db
       .query("innerwarParticipants")
@@ -332,11 +414,21 @@ export const getDetail = query({
       })
     );
 
+    let mvp: ({ userId: Id<"users">; user: Doc<"users"> | null } & MvpStat) | null = null;
+    if (innerwar.status === "done" && innerwar.winnerTeam) {
+      const best = pickInnerwarMvp(matches, allParticipants, innerwar.winnerTeam);
+      if (best) {
+        const mvpUser = await ctx.db.get(best.userId);
+        mvp = { userId: best.userId, user: mvpUser, ...best.stat };
+      }
+    }
+
     return {
       innerwar,
       participants: participantsWithUsers,
       matches: matchesWithPlayers.sort((a, b) => a.matchIndex - b.matchIndex),
       currentUser: currentUser ? { ...currentUser, effectiveRole: role } : null,
+      mvp,
       // 성적기반 배정 가중치 — 프론트에서 하드코딩 없이 항상 실제 값을 표시하기 위해 함께 반환
       scoreWeights: { league: SCORE_WEIGHT_LEAGUE, innerwar: SCORE_WEIGHT_INNERWAR },
     };

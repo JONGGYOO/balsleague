@@ -34,8 +34,8 @@ const defaultForm = (): FormState => ({
 });
 
 const STATUS_LABEL: Record<string, string> = {
-  draft: "팀 배정 전",
-  teamAssigned: "팀 배정 완료",
+  draft: "모집 중",
+  teamAssigned: "모집 중",
   inProgress: "경기 중",
   done: "완료",
 };
@@ -337,14 +337,21 @@ export default function InnerwarsPage() {
                               🎁 {w.betItem}
                             </span>
                           )}
-                          {w.status && w.status !== "draft" && (
-                            <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${
+                          {w.status && (
+                            <span className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full font-medium ${
                               w.status === "done"
                                 ? "bg-gray-100 text-gray-600"
                                 : w.status === "inProgress"
-                                  ? "bg-orange-50 text-orange-600"
-                                  : "bg-green-50 text-green-600"
+                                  ? "bg-orange-50 text-orange-600 animate-pulse"
+                                  : "bg-green-50 text-green-600 animate-pulse"
                             }`}>
+                              {w.status !== "done" && (
+                                <span
+                                  className={`w-[5px] h-[5px] rounded-full shrink-0 ${
+                                    w.status === "inProgress" ? "bg-orange-600" : "bg-green-600"
+                                  }`}
+                                />
+                              )}
                               {STATUS_LABEL[w.status]}
                             </span>
                           )}
@@ -359,6 +366,17 @@ export default function InnerwarsPage() {
                             </span>
                           )}
                         </div>
+                        {w.mvp && (
+                          <div className="mt-1.5">
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-gradient-to-br from-amber-50 to-white px-2.5 py-1 shadow-[0_2px_6px_-2px_rgba(180,83,9,0.3)]">
+                              <span className="text-sm">🏅</span>
+                              <span className="text-xs font-semibold text-amber-800">MVP</span>
+                              <span className="text-xs font-extrabold bg-gradient-to-r from-amber-700 via-amber-500 to-amber-600 bg-clip-text text-transparent">
+                                {w.mvp.user?.nickname ?? w.mvp.user?.name}
+                              </span>
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-2 ml-3 shrink-0">

@@ -1065,6 +1065,19 @@ export default function InnerwarDetailPage() {
                 {innerwar.winnerTeam}팀 승리!
               </h2>
               <p className="text-sm text-gray-500 mb-4">총 {completedMatches.length}경기</p>
+              {detail?.mvp && (
+                <div className="flex justify-center mb-4">
+                  <div className="inline-flex flex-col items-center gap-1 rounded-2xl border-[1.5px] border-amber-300 bg-gradient-to-b from-amber-50 to-white px-6 py-3.5 shadow-[0_8px_20px_-14px_rgba(180,83,9,0.55)]">
+                    <span className="text-[0.65rem] font-extrabold tracking-widest text-amber-700">🏅 MVP</span>
+                    <span className="text-xl font-black bg-gradient-to-r from-amber-700 via-amber-500 to-amber-600 bg-clip-text text-transparent">
+                      {detail.mvp.user?.nickname ?? detail.mvp.user?.name}
+                    </span>
+                    <span className="text-xs font-semibold text-amber-800">
+                      {detail.mvp.wins}승 {detail.mvp.draws}무 {detail.mvp.losses}패 · {detail.mvp.scored}득 {detail.mvp.conceded}실
+                    </span>
+                  </div>
+                </div>
+              )}
               {/* 5-1: 경기 종료 후 초기화도 관리자만 */}
               <div className="flex justify-center">
                 {renderResetButton(true)}
