@@ -320,25 +320,25 @@ export default function InnerwarsPage() {
                   return (
                     <li
                       key={w._id}
-                      className="bg-white rounded-xl border border-gray-200 px-5 py-4 flex items-center justify-between shadow-sm"
+                      className="bg-white rounded-xl border border-gray-200 px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between shadow-sm"
                     >
                       <div className="flex-1 min-w-0">
                         <Link href={`/innerwars/${w._id}`} className="hover:opacity-70 transition-opacity">
                           <InnerwarLabel innerwar={w} />
                         </Link>
-                        <div className="flex items-center gap-2 mt-1">
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
                           {/* 8-11-1: 내전별 참가자 수 표시 */}
-                          <span className="text-xs text-gray-400">
+                          <span className="shrink-0 whitespace-nowrap text-xs text-gray-400">
                             참가자 {w.participantCount}명
                           </span>
                           {/* 8-4: 내기 품목 표시 */}
                           {w.betItem && (
-                            <span className="text-xs text-yellow-700 bg-yellow-50 px-2 py-0.5 rounded-full">
+                            <span className="shrink-0 whitespace-nowrap text-xs text-yellow-700 bg-yellow-50 px-2 py-0.5 rounded-full">
                               🎁 {w.betItem}
                             </span>
                           )}
                           {w.status && (
-                            <span className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full font-medium ${
+                            <span className={`shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full font-medium ${
                               w.status === "done"
                                 ? "bg-gray-100 text-gray-600"
                                 : w.status === "inProgress"
@@ -356,12 +356,12 @@ export default function InnerwarsPage() {
                             </span>
                           )}
                           {w.teamAssignPermission === "all" && (
-                            <span className="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
+                            <span className="shrink-0 whitespace-nowrap text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
                               전체 참여
                             </span>
                           )}
                           {w.leagueApplicable && (
-                            <span className="text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+                            <span className="shrink-0 whitespace-nowrap text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
                               🏆 리그 적용
                             </span>
                           )}
@@ -379,7 +379,7 @@ export default function InnerwarsPage() {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2 ml-3 shrink-0">
+                      <div className="flex items-center gap-2 justify-end border-t border-gray-100 pt-3 mt-3 shrink-0 sm:border-t-0 sm:pt-0 sm:mt-0 sm:ml-3">
                         {/* 10-1: 경기 중인 내전은 팀을 선택해 참가해야 x로 뺀 빈자리를 채울 수 있다 */}
                         {!isApproved && w.status === "inProgress" && (
                           <div className="flex items-center gap-1">
