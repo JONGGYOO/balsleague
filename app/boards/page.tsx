@@ -240,6 +240,27 @@ export default function BoardsPage() {
             ))}
           </ul>
         )}
+
+        {data && (
+          <Link
+            href="/efootball-skills"
+            className="mt-3 bg-white rounded-xl border border-gray-200 px-5 py-4 flex items-center shadow-sm hover:opacity-70 transition-opacity"
+          >
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-base font-semibold text-gray-900">⚽ 특수 기술 매커니즘</span>
+              </div>
+              <p className="text-sm text-gray-500 mt-0.5 truncate">
+                e풋볼 특수 기술 21종의 발동 조건·수치·중첩 규칙 도감
+              </p>
+              <div className="flex items-center gap-1.5 mt-1.5">
+                <span className="inline-block text-xs text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                  📖 가이드
+                </span>
+              </div>
+            </div>
+          </Link>
+        )}
       </main>
 
       {showModal && isManager && (
